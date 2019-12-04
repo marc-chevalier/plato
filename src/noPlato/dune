@@ -1,0 +1,5 @@
+(library
+ (name        noPlato)
+ (public_name plato.noPlato)
+ (libraries str)
+)

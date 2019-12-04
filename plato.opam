@@ -1,0 +1,17 @@
+opam-version: "2.0"
+name: "plato"
+version: "1.0.0"
+synopsis: "Python Library Adapted To OCaml"
+maintainer: "Marc Chevalier <marc.chevalier@ens.fr>"
+authors: "Marc Chevalier <marc.chevalier@ens.fr>"
+depends: [
+  "ocaml" {>= "4.07.1"}
+  "dune" {build & >= "2.0.0"}
+]
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+]
+run-test: [
+  ["dune" "runtest"]
+]
+license: "MIT"
