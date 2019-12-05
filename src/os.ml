@@ -3,6 +3,7 @@ type stat_results = Unix.stats
 let stat : string -> stat_results = Unix.stat
 let lstat : string -> stat_results = Unix.lstat
 let openfile = Unix.openfile
+let close = Unix.close
 let listdir : string -> string array = Sys.readdir
 let chmod = Unix.chmod
 
@@ -22,6 +23,7 @@ module type PATH =
   (sig
     val join: string -> string list -> string
     val same_stat: stat_results -> stat_results -> bool
+    val normpath: string -> string
   end)
 
 let path : (module PATH) = if Sys.os_type = "Unix" then (module PosixPath) else (module NtPath)

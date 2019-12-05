@@ -22,8 +22,20 @@ let endswith (suffix: string) (s: string) : bool =
   else
     suffix = String.sub s (String.length s - String.length suffix) (String.length suffix)
 
+let split ?(sep: string = "") s =
+  let r = ref [] in
+  let j = ref (String.length s) in
+  for i = String.length s - 1 downto 0 do
+    if String.(contains sep (unsafe_get s i)) then begin
+      r := String.sub s (i + 1) (!j - i - 1) :: !r;
+      j := i
+    end
+  done;
+  String.sub s 0 !j :: !r
+
 let slice ?(start: int option) ?(stop: int option) ?(step: int = 1) (s: string) : string =
-  Helpers.Slice.slice ?start ?stop ~step String.length ~sub:String.sub String.get (fun s c -> s^String.make 1 c) "" s
+  Helpers.Slice.slice ?start ?stop ~step String.length ~sub:String.sub
+    String.get (`I (fun i c b -> Bytes.set b i c)) (fun l -> Bytes.make l ' ') (Bytes.to_string) s
 
 let find ?(start: int option) ?(stop: int option) (sub: string) (s: string) : int =
   let l = String.length s in
@@ -70,3 +82,19 @@ let partition (sep: string) (s: string) : string * string * string =
   | Text before :: Delim sep :: q -> before, sep, join q
   | Text _ :: Text _ :: _ -> failwith "absurd"
   | Delim sep :: q -> "", sep, join q
+
+let rpartition (sep: string) (s: string) : string * string * string =
+  let open NoPlato.Str in
+  let l : split_result list = full_split (regexp_string sep) s in
+  let join (l: split_result list) : string=
+    l
+    |> Stdlib.List.map (function Text t -> t | Delim t -> t)
+    |> String.concat ""
+  in
+  match Stdlib.List.rev l with
+  | [] -> "", "", ""
+  | [Text t] -> "", "", t
+  | [Delim t] -> "", t, ""
+  | Text after :: Delim sep :: q -> q |> Stdlib.List.rev |> join, sep, after
+  | Text _ :: Text _ :: _ -> failwith "absurd"
+  | Delim sep :: q -> join q, sep, ""

@@ -12,4 +12,4 @@ let slice (type a) ?(start: int option) ?(stop: int option) ?(step: int = 1) (l:
     | None -> l
     | Some start -> aux start l
   else
-  Helpers.Slice.slice ?start ?stop ~step Stdlib.List.length Stdlib.List.nth (fun s c -> s@[c]) [] l
+    Helpers.Slice.slice ?start ?stop ~step Stdlib.List.length Stdlib.List.nth (`L (fun c s -> c::s)) (fun _ -> []) (fun x -> x) l

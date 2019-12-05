@@ -4,6 +4,7 @@ module type FLAVOUR_PARAM =
   (sig
     module PathMod: Os.PATH
     val sep: char
+    val sep_s: string
     val altsep: char option
     val has_drv: bool
     val is_supported: bool
@@ -18,7 +19,7 @@ module type FLAVOUR_PARAM =
 module WindowsFlavourParam : FLAVOUR_PARAM =
   (struct
     module PathMod = NtPath
-    
+
     let sep = '\\'
     let sep_s : string = String.make 1 sep
     let join : string list -> string = String.concat sep_s
@@ -212,8 +213,6 @@ module Flavour(F: FLAVOUR_PARAM) : FLAVOUR =
 
     include F
 
-    let sep_s : string = String.make 1 F.sep
-
     let altsep_s : string  option = match F.altsep with None -> None | Some altsep -> Some (String.make 1 altsep)
     let replace_altsep (s: string) : string = 
       match altsep_s with
@@ -303,6 +302,7 @@ module NormalAccessor =
     let stat = Os.stat
     let lstat = Os.lstat
     let openfile = Os.openfile
+    let close = Os.close
     let listdir = Os.listdir
     let scandir = Os.scandir
     let chmod = Os.chmod
@@ -406,7 +406,7 @@ module type FULL_PURE_PATH =
       mutable cached_cparts: string list option;
     }
     val make_t: string -> string -> string list -> t
-      
+
     include PURE_PATH with type t := t
   end)
 
@@ -643,10 +643,15 @@ module type PATH =
 
     val cwd: unit -> t
     val home: unit -> t
-    val stat: t -> Os.stat_results
     val samefile: t -> t -> bool
     val iterdir: t -> t Array.t
     val absolute: t -> t
+    val resolve: ?strict:bool -> t -> t
+    val stat: t -> Os.stat_results
+    val owner: t -> string
+    val group: t -> string
+    val open_with: t -> Unix.open_flag list -> Unix.file_perm -> (Unix.file_descr -> 'a) -> 'a
+    val read: t -> string
   end)
 
 module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
@@ -675,6 +680,83 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
       else
         let drv, root, parts = PP.(Os.getcwd () :: self.parts) |> PP.Flavour.parse_parts in
         PP.make_t drv root parts
+
+    let resolve ?(strict: bool = false) (path: t) : string =
+      let module StringMap = Stdlib.Map.Make(Stdlib.String) in
+      let sep_s = PP.Flavour.sep_s in
+      let seen = ref StringMap.empty in
+      let rec resolve_ (path: string) (rest: string) : string =
+        let path =
+          if Str.startswith PP.Flavour.sep_s rest then
+            ""
+          else
+            path
+        in
+        let path =
+          Stdlib.List.fold_left
+            (fun path name ->
+               if name = "" || name = "." then
+                 path
+               else if name = ".." then
+                 let path, _, _ = Str.rpartition sep_s path in
+                 path
+               else
+                 let newpath = path ^ sep_s ^ name in
+                 match StringMap.find_opt newpath !seen with
+                 | Some (Some path) -> path
+                 | Some None -> raise (Exn.RuntimeError (Format.asprintf "Symlink loop from %s" newpath))
+                 | None ->
+                   match A.readlink newpath with
+                   | target ->
+                     let () = seen := StringMap.add newpath None !seen in
+                     let path = resolve_ path target in
+                     let () = seen := StringMap.add newpath (Some path) !seen in
+                     path
+                   | exception Unix.Unix_error (Unix.EINVAL, _, _) -> newpath
+                   | exception Unix.Unix_error (errno, func, arg) when strict -> raise (Unix.Unix_error (errno, func, arg))
+                   | exception Unix.Unix_error _ -> newpath
+            )
+            path
+            (Str.split ~sep:sep_s rest)
+        in
+        path
+      in
+      let base = if PP.is_absolute path then "" else Os.getcwd () in
+      let r = resolve_ base (PP.to_string path) in
+      if r <> "" then
+        r
+      else
+        PP.Flavour.sep_s
+
+    let resolve ?(strict: bool = false) (self: t) : t =
+      let s = resolve ~strict self in
+      let normed = PP.Flavour.PathMod.normpath s in
+      PP.of_string normed
+
+    let owner (self: t) : string =
+      Pwd.((getpwuid (stat self).Unix.st_uid).pw_name)
+
+    let group (self: t) : string =
+      Grp.((getgrgid(stat self).Unix.st_gid).gr_name)
+
+    let open_with (type a) (self: t) (flags: Unix.open_flag list) (perm: Unix.file_perm) (f: Unix.file_descr -> a) : a =
+      let fd = A.openfile (PP.to_string self) flags perm in
+      Stdlib.Fun.protect
+        (fun () -> f fd)
+        ~finally:(
+          fun () ->
+            try A.close fd with
+            | UnixLabels.Unix_error _ -> ()
+        )
+
+    let read (self: t) : string =
+      let ic = self |> PP.to_string |> open_in in
+      let n = in_channel_length ic in
+      let s = Bytes.create n in
+      really_input ic s 0 n;
+      close_in ic;
+      Bytes.to_string s
+
   end)
 
 module WindowsPath = MakePath(NormalAccessor)(WindowsPurePath)
