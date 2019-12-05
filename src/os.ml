@@ -16,12 +16,15 @@ let symlink = Unix.link
 let utime = Unix.utimes
 let readlink = Unix.readlink
 
+let getcwd = Sys.getcwd
+
 module type PATH =
   (sig
-    val join : string -> string list -> string
+    val join: string -> string list -> string
+    val same_stat: stat_results -> stat_results -> bool
   end)
 
-let path : (module PATH) = if Sys.os_type = "Unix" then (module PosixPath) else (module PosixPath)
+let path : (module PATH) = if Sys.os_type = "Unix" then (module PosixPath) else (module NtPath)
 module Path : PATH = (val path)
 
 module type DIR_ENTRY =

@@ -2,12 +2,12 @@
 
 module type FLAVOUR_PARAM =
   (sig
+    module PathMod: Os.PATH
     val sep: char
     val altsep: char option
     val has_drv: bool
     val is_supported: bool
     val join: string list -> string
-    val normpath: string -> string
     val splitroot: string -> string * string * string
     val casefold: string -> string
     val casefold_parts: string list -> string list
@@ -17,65 +17,15 @@ module type FLAVOUR_PARAM =
 
 module WindowsFlavourParam : FLAVOUR_PARAM =
   (struct
+    module PathMod = NtPath
+    
     let sep = '\\'
     let sep_s : string = String.make 1 sep
     let join : string list -> string = String.concat sep_s
 
     let altsep = Some '/'
-    let altsep_s : string  option = match altsep with None -> None | Some altsep -> Some (String.make 1 altsep)
-
-    let replace_altsep (s: string) : string = 
-      match altsep_s with
-      | None -> s
-      | Some altsep_s -> NoPlato.Str.(global_replace (regexp_string altsep_s) sep_s s)
 
     let has_drv = true
-
-    let splitdrive : string -> string * string = assert false
-
-    let normpath (path: string) : string  =
-      let lstrip : char -> string -> string = assert false in
-      let curdir = "." in
-      let pardir = ".." in
-      let special_prefixes = ["\\\\.\\"; "\\\\?\\"] in
-      if Stdlib.List.exists (fun p -> Str.startswith p path) special_prefixes then
-        path
-      else
-        let path = replace_altsep path in
-        let prefix, path = splitdrive path in
-        let prefix, path =
-          if Str.startswith sep_s path then
-            prefix^sep_s, lstrip sep path
-          else
-            prefix, path
-        in
-        let comps = String.split_on_char sep path in
-
-        let comps =
-          Stdlib.List.fold_left
-            (fun comps comp ->
-               if comp = "" || comp = curdir then
-                 comps
-               else if comp = pardir then
-                 begin
-                   match comps with
-                   | _::t -> t
-                   | [] when Str.endswith sep_s prefix -> []
-                   | [] -> [comp]
-                 end
-               else
-                 comp::comps
-            )
-            []
-            comps
-        in
-        let comps =
-          if prefix == "" && comps == [] then
-            comps @ [curdir]
-          else
-            comps
-        in
-        prefix ^ join comps
 
     let is_supported = Sys.os_type = "Win32" || Sys.os_type = "Cygwin"
 
@@ -206,6 +156,7 @@ module WindowsFlavourParam : FLAVOUR_PARAM =
 
 module PosixFlavourParam : FLAVOUR_PARAM =
   (struct
+    module PathMod = PosixPath
 
     let sep = '/'
     let altsep = None
@@ -246,43 +197,6 @@ module PosixFlavourParam : FLAVOUR_PARAM =
         | homedir -> homedir
         | exception Exn.KeyError _ ->
           raise (Exn.RuntimeError (Format.asprintf "Can't determine home directory for %s" username) )
-    let normpath (path: string) : string =
-      if path = "" then
-        "."
-      else
-        let initial_slashes = Str.startswith sep_s path in
-        let initial_slashes =
-          if initial_slashes && Str.startswith (String.make 2 sep) path && not (Str.startswith (String.make 3 sep) path) then
-            2
-          else if initial_slashes then
-            1
-          else
-            0
-        in
-        let comps = String.split_on_char sep path in
-        let new_comps =
-          Stdlib.List.fold_left
-            (fun new_comps comp ->
-               if comp = "" || comp = "." then
-                 new_comps
-               else if comp <> ".." || (initial_slashes = 0 && new_comps = []) ||
-                       (match new_comps with ".."::_ -> true | _ -> false) then
-                 comp::new_comps
-               else
-                 match new_comps with
-                 | _::t -> t
-                 | [] -> []
-            )
-            []
-            comps
-        in
-        let comps = Stdlib.List.rev new_comps in
-        let path = join comps in
-        let path = (String.make initial_slashes sep)^path in
-        if path != "" then
-          path
-        else
-          "."
   end)
 
 module type FLAVOUR =
@@ -381,8 +295,8 @@ module Flavour(F: FLAVOUR_PARAM) : FLAVOUR =
 
   end)
 
-module WindowsFlavour = Flavour(WindowsFlavourParam)
-module PosixFlavour = Flavour(PosixFlavourParam)
+module WindowsFlavour : FLAVOUR = Flavour(WindowsFlavourParam)
+module PosixFlavour : FLAVOUR = Flavour(PosixFlavourParam)
 
 module NormalAccessor =
   (struct
@@ -418,7 +332,7 @@ module type PATH_PARENTS =
 module MakePathParents(P: sig type path end) : PATH_PARENTS with type path = P.path =
   (struct
     type path = P.path
-    type t_ = {
+    type t = {
       drv: string;
       root: string;
       parts: string list;
@@ -427,7 +341,7 @@ module MakePathParents(P: sig type path end) : PATH_PARENTS with type path = P.p
     include Collections.Abc.BuildSequence(struct
         type key = int
         type e = P.path
-        type t = t_
+        type nonrec t = t
         let len ({drv; root; parts; _}: t) : int =
           if drv <> "" || root <> "" then
             List.len parts - 1
@@ -445,6 +359,7 @@ module MakePathParents(P: sig type path end) : PATH_PARENTS with type path = P.p
 module type PURE_PATH =
   (sig
     type t
+    module Flavour : FLAVOUR
     module PathParents: PATH_PARENTS with type path = t
     val of_paths: t list -> t
     val of_strings: string list -> t
@@ -480,7 +395,22 @@ module type PURE_PATH =
     val (/): t -> t -> t
   end)
 
-module MakePurePath (F: FLAVOUR) : PURE_PATH =
+module type FULL_PURE_PATH =
+  (sig
+    type t = private {
+      drv: string;
+      root: string;
+      parts: string list;
+      mutable hash: int option;
+      mutable str: string option;
+      mutable cached_cparts: string list option;
+    }
+    val make_t: string -> string -> string list -> t
+      
+    include PURE_PATH with type t := t
+  end)
+
+module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
   (struct
     type t = {
       drv: string;
@@ -490,6 +420,8 @@ module MakePurePath (F: FLAVOUR) : PURE_PATH =
       mutable str: string option;
       mutable cached_cparts: string list option;
     }
+
+    module Flavour = F
 
     module PathParents = MakePathParents(struct type path = t end)
 
@@ -699,8 +631,8 @@ module MakePurePath (F: FLAVOUR) : PURE_PATH =
     let (>=) = ge
   end)
 
-module WindowsPurePath = MakePurePath(WindowsFlavour)
-module PosixPurePath = MakePurePath(PosixFlavour)
+module WindowsPurePath : FULL_PURE_PATH = MakePurePath(WindowsFlavour)
+module PosixPurePath : FULL_PURE_PATH = MakePurePath(PosixFlavour)
 
 let pure_path : (module PURE_PATH) = if Sys.os_type = "Unix" then (module WindowsPurePath) else (module PosixPurePath)
 module PurePath : PURE_PATH = (val pure_path)
@@ -708,14 +640,45 @@ module PurePath : PURE_PATH = (val pure_path)
 module type PATH =
   (sig
     type t
+
+    val cwd: unit -> t
+    val home: unit -> t
+    val stat: t -> Os.stat_results
+    val samefile: t -> t -> bool
+    val iterdir: t -> t Array.t
+    val absolute: t -> t
   end)
 
-module MakePath(PP: PURE_PATH) =
+module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
   (struct
+    type t = PP.t
+
+    let cwd ((): unit) : t =
+      Os.getcwd () |> PP.of_string
+
+    let home ((): unit) : t =
+      PP.Flavour.gethomedir () |> PP.of_string
+
+    let stat (self: t) : Os.stat_results =
+      self |> PP.to_string |> A.stat
+
+    let samefile (self: t) (other: t) : bool =
+      Os.Path.same_stat (stat self) (stat other)
+
+    let iterdir (self: t) : t Array.t =
+      let dir = self |> PP.to_string |> A.listdir in
+      Array.map PP.(fun name -> make_t self.drv self.root (self.parts @ [name])) dir
+
+    let absolute (self: t) : t =
+      if PP.is_absolute self then
+        self
+      else
+        let drv, root, parts = PP.(Os.getcwd () :: self.parts) |> PP.Flavour.parse_parts in
+        PP.make_t drv root parts
   end)
 
-module WindowsPath = MakePath(WindowsPurePath)
-module PosixPath = MakePath(PosixPurePath)
+module WindowsPath = MakePath(NormalAccessor)(WindowsPurePath)
+module PosixPath = MakePath(NormalAccessor)(PosixPurePath)
 
-let path : (module PATH) = if Sys.os_type = "Unix" then (module WindowsPurePath) else (module PosixPurePath)
+let path : (module PATH) = if Sys.os_type = "Unix" then (module WindowsPath) else (module PosixPath)
 module Path : PATH = (val path)
