@@ -1,0 +1,21 @@
+image: ocaml/opam2:ubuntu-19.04
+
+before_script:
+  - sudo apt-get update -y && sudo apt-get install m4 -y
+  - opam update
+
+ocaml-4.08:
+  script:
+    - opam switch 4.08
+    - eval $(opam env)
+    - opam install ./plato.opam --deps-only -t
+    - dune runtest
+    - opam install ./plato.opam
+
+ocaml-4.09:
+  script:
+    - opam switch 4.09
+    - eval $(opam env)
+    - opam install ./plato.opam --deps-only -t
+    - dune runtest
+    - opam install ./plato.opam

@@ -10,7 +10,7 @@ let altsep_s : string  option = match altsep with None -> None | Some altsep -> 
 let replace_altsep (s: string) : string = 
   match altsep_s with
   | None -> s
-  | Some altsep_s -> NoPlato.Str.(global_replace (regexp_string altsep_s) sep_s s)
+  | Some altsep_s -> NoPlato.Str.(global_replace (regexp_string altsep_s) "\\\\" s)
 
 let splitdrive (p: string) : string * string =
   if String.length p >= 2 then

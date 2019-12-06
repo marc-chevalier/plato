@@ -67,18 +67,18 @@ module WindowsFlavourParam : FLAVOUR_PARAM =
       in
       let third = Str.slice ~start:2 ~stop:3 part in
       let prefix, root, part, return =
-        if second = sep_s && first = sep_s && third != sep_s then
+        if second = sep_s && first = sep_s && third <> sep_s then
           let index = Str.find ~start:2 sep_s part in 
-          if index != -1 then
+          if index <> -1 then
             let index2 = Str.find ~start:(index + 1) sep_s part in
-            if index2 != index + 1 then
+            if index2 <> index + 1 then
               let index2 =
                 if index2 = -1 then
                   String.length part
                 else
                   index2
               in
-              if prefix != "" then
+              if prefix <> "" then
                 prefix ^ Str.slice ~start:1 ~stop:index2 part, sep_s, Str.slice ~start:(index2 + 1) part, true
               else 
                 Str.slice ~stop:index2 part, sep_s, Str.slice ~start:(index2 + 1) part, true
@@ -145,10 +145,10 @@ module WindowsFlavourParam : FLAVOUR_PARAM =
       | None -> userhome
       | Some username ->
         let drv, root, parts = parse_parts [userhome] in
-        if Stdlib.List.(parts |> rev |> hd) != Sys.getenv "USERNAME" then
+        if Stdlib.List.(parts |> rev |> hd) <> Sys.getenv "USERNAME" then
           failwith (Format.asprintf "Can't determine home directory for %s" username);
         let parts = Stdlib.List.(parts |> rev |> tl |> cons username |> rev) in
-        if drv != "" || root != "" then
+        if drv <> "" || root <> "" then
           drv^root^join (match parts with [] -> [] | _::q -> q)
         else
           join parts
@@ -167,7 +167,7 @@ module PosixFlavourParam : FLAVOUR_PARAM =
     let join : string list -> string = String.concat sep_s
 
     let splitroot (part: string) : string * string * string =
-      if part != "" && part.[0] = sep then
+      if part <> "" && part.[0] = sep then
         let stripped_part = Str.lstrip ~chars:sep_s part in
         if String.(length part - length stripped_part) = 2 then
           "", String.make 2 sep, stripped_part
@@ -217,7 +217,7 @@ module Flavour(F: FLAVOUR_PARAM) : FLAVOUR =
     let replace_altsep (s: string) : string = 
       match altsep_s with
       | None -> s
-      | Some altsep_s -> NoPlato.Str.(global_replace (regexp_string altsep_s) sep_s s)
+      | Some altsep_s -> NoPlato.Str.(global_replace (regexp_string altsep_s) (quote sep_s) s)
 
     let safe_tail (type a) (l: a list) : a list =
       match l with
@@ -231,44 +231,49 @@ module Flavour(F: FLAVOUR_PARAM) : FLAVOUR =
       let root = "" in
       let it = Stdlib.List.rev parts in
       let drv, root, parsed =
-        Stdlib.List.fold_left
-          (fun (drv, root, parsed) part ->
-             if part = "" then
-               drv, root, parsed
-             else
-               let part = replace_altsep part in
-               let drv, root, rel = F.splitroot part in
-               let parsed =
-                 if String.contains rel F.sep then
-                   String.split_on_char F.sep rel |> Stdlib.List.rev |> Stdlib.List.fold_left (fun parsed x -> if rel != "" && rel != "." then x::parsed else parsed) parsed
-                 else if rel != "" && rel != "." then
-                   rel::parsed
-                 else
-                   parsed
-               in
-               let () =
-                 if drv != "" || root != "" then
-                   if drv == "" then
-                     Stdlib.List.iter
-                       (fun part ->
-                          if part == "" then
-                            ()
-                          else
-                            let part = replace_altsep part in
-                            let drv, _root, _rel = F.splitroot part in
-                            if drv != "" then
-                              raise (Break (drv, root, parsed))
-                       )
-                       it;
-                 raise (Break (drv, root, parsed))
-               in
-               drv, root, parsed
-          )
-          (drv, root, parsed)
-          it
+        try
+          Stdlib.List.fold_left
+            (fun (drv, root, parsed) part ->
+               if part = "" then
+                 drv, root, parsed
+               else
+                 let part = replace_altsep part in
+                 let drv, root, rel = F.splitroot part in
+                 let parsed =
+                   if String.contains rel F.sep then
+                     String.split_on_char F.sep rel
+                     |> Stdlib.List.rev
+                     |> Stdlib.List.fold_left (fun parsed x -> if x <> "" && x <> "." then x::parsed else parsed) parsed
+                   else if rel <> "" && rel <> "." then
+                     rel::parsed
+                   else
+                     parsed
+                 in
+                 let () =
+                   if drv <> "" || root <> "" then
+                     if drv = "" then
+                       Stdlib.List.iter
+                         (fun part ->
+                            if part = "" then
+                              ()
+                            else
+                              let part = replace_altsep part in
+                              let drv, _root, _rel = F.splitroot part in
+                              if drv <> "" then
+                                raise (Break (drv, root, parsed))
+                         )
+                         it;
+                   raise (Break (drv, root, parsed))
+                 in
+                 drv, root, parsed
+            )
+            (drv, root, parsed)
+            it
+        with
+        | Break (drv, root, parts) -> drv, root, parts 
       in
       let parsed =
-        if drv != "" || root != "" then
+        if drv <> "" || root <> "" then
           (drv^root)::parsed
         else
           parsed
@@ -279,12 +284,12 @@ module Flavour(F: FLAVOUR_PARAM) : FLAVOUR =
 
     let join_parsed_parts (drv: string) (root: string) (parts: string list)
         (drv2: string) (root2: string) (parts2: string list) : string * string * string list =
-      if root2 != "" then
-        if drv2 == "" && drv != "" then
+      if root2 <> "" then
+        if drv2 = "" && drv <> "" then
           drv, root2, (drv^root2) :: safe_tail parts2
         else
           drv2, root2, parts2
-      else if drv2 != "" then
+      else if drv2 <> "" then
         if drv2 = drv || F.casefold drv2 = F.casefold drv then
           drv, root, parts @ (safe_tail parts2)
         else
@@ -325,10 +330,17 @@ module type PATH_PARENTS =
     type t
     type path
     include Collections.Abc.SEQUENCE with type key := int and type e := path and type t := t
+  end)
+
+module type FULL_PATH_PARENTS =
+  (sig
+    type t
+    type path
+    include PATH_PARENTS with type path := path and type t := t
     val make: (string -> string -> string list -> path) -> string -> string -> string list -> t
   end)
 
-module MakePathParents(P: sig type path end) : PATH_PARENTS with type path = P.path =
+module MakePathParents(P: sig type path end) : FULL_PATH_PARENTS with type path = P.path =
   (struct
     type path = P.path
     type t = {
@@ -337,7 +349,13 @@ module MakePathParents(P: sig type path end) : PATH_PARENTS with type path = P.p
       parts: string list;
       from_parsed_parts: string -> string -> string list -> path;
     }
-    include Collections.Abc.BuildSequence(struct
+    module M :
+      Collections.Abc.MIN_SEQUENCE
+      with type key = int
+       and type e = P.path
+       and type t = t
+      =
+      (struct
         type key = int
         type e = P.path
         type nonrec t = t
@@ -351,6 +369,7 @@ module MakePathParents(P: sig type path end) : PATH_PARENTS with type path = P.p
             raise (Exn.IndexError (string_of_int k));
           from_parsed_parts drv root (List.slice ~stop:(-k-1) parts)
       end)
+    include Collections.Abc.BuildSequence(M)
     let make (from_parsed_parts: string -> string -> string list -> path) (drv: string) (root: string) (parts: string list) : t =
       {from_parsed_parts; drv; root; parts}
   end)
@@ -358,8 +377,8 @@ module MakePathParents(P: sig type path end) : PATH_PARENTS with type path = P.p
 module type PURE_PATH =
   (sig
     type t
-    module Flavour : FLAVOUR
     module PathParents: PATH_PARENTS with type path = t
+    val repr: t -> string
     val of_paths: t list -> t
     val of_strings: string list -> t
     val of_string: string -> t
@@ -396,6 +415,7 @@ module type PURE_PATH =
 
 module type FULL_PURE_PATH =
   (sig
+    module Flavour : FLAVOUR
     type t = private {
       drv: string;
       root: string;
@@ -405,7 +425,6 @@ module type FULL_PURE_PATH =
       mutable cached_cparts: string list option;
     }
     val make_t: string -> string -> string list -> t
-
     include PURE_PATH with type t := t
   end)
 
@@ -424,6 +443,10 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
 
     module PathParents = MakePathParents(struct type path = t end)
 
+    let repr (self: t) : string =
+      Format.asprintf "{drv: %s; root: %s; parts: [%s]}"
+        self.drv self.root (String.concat ";" self.parts)
+
     let make_t (drv: string) (root: string) (parts: string list) : t =
       {drv; root; parts; hash = None; str = None; cached_cparts = None}
 
@@ -441,7 +464,7 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
 
     let format_parsed_parts (drv: string) (root: string) (parts: string list) : string =
       if drv <> "" || root <> "" then
-        drv ^ root ^ F.join (match parts with [] -> [] | _::t -> t)
+        drv ^ root ^ F.join (List.slice ~start:1 parts)
       else
         F.join parts
 
@@ -545,7 +568,7 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
       else
         let drv, root, parts = F.parse_parts [new_name] in
         let last = new_name.[String.length new_name - 1] in
-        if new_name = "" || last = F.sep || Some last = F.altsep || drv <> "" || root <> "" || Stdlib.List.length parts != 1 then
+        if new_name = "" || last = F.sep || Some last = F.altsep || drv <> "" || root <> "" || Stdlib.List.length parts <> 1 then
           raise (Exn.ValueError (Format.asprintf "Invalid name %s" new_name))
         else
           make_t self.drv self.root ((List.slice ~stop:~-1 self.parts) @ [new_name])
@@ -584,7 +607,7 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
       in
       let n = List.len to_abs_parts in
       let cf = F.casefold_parts in
-      if n == 0 && (self.root <> "" || self.drv <> "") || n <> 0 && List.slice ~stop:n abs_part |> cf <> cf to_abs_parts then
+      if n = 0 && (self.root <> "" || self.drv <> "") || n <> 0 && List.slice ~stop:n abs_part |> cf <> cf to_abs_parts then
         raise (Exn.ValueError (Format.asprintf "%a does not start with %s" pp self (format_parsed_parts other.drv other.root other.parts)));
       make_t "" (if n = 1 then self.root else "") (List.slice ~start:n abs_part)
 
@@ -605,7 +628,7 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
       make_child self other
 
     let parent ({drv; root; parts; _} as self: t) : t =
-      if Stdlib.List.compare_length_with parts 1 == 0 && (drv <> "" || root <> "") then
+      if Stdlib.List.compare_length_with parts 1 = 0 && (drv <> "" || root <> "") then
         self
       else
         make_t drv root (List.slice ~stop:~-1 parts)
@@ -630,16 +653,20 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
     let (>=) = ge
   end)
 
-module WindowsPurePath : FULL_PURE_PATH = MakePurePath(WindowsFlavour)
-module PosixPurePath : FULL_PURE_PATH = MakePurePath(PosixFlavour)
+module WindowsPurePath_ : FULL_PURE_PATH = MakePurePath(WindowsFlavour)
+module PosixPurePath_ : FULL_PURE_PATH = MakePurePath(PosixFlavour)
 
-let pure_path : (module PURE_PATH) = if Sys.os_type = "Unix" then (module WindowsPurePath) else (module PosixPurePath)
-module PurePath : PURE_PATH = (val pure_path)
+(* let pure_path : (module PURE_PATH) = if Sys.os_type = "Unix" then (module PosixPurePath_) else (module WindowsPurePath_)
+   module PurePath : PURE_PATH = (val pure_path) *)
 
 module type PATH =
   (sig
+    module PurePath: PURE_PATH
+
     type t
 
+    val to_purepath: t -> PurePath.t
+    val of_purepath: PurePath.t -> t
     val cwd: unit -> t
     val home: unit -> t
     val samefile: t -> t -> bool
@@ -678,7 +705,16 @@ module type PATH =
 
 module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
   (struct
+
+    module PurePath = PP
+
     type t = PP.t
+
+    let to_purepath (t: t) : PP.t =
+      t
+
+    let of_purepath (t: PP.t) : t =
+      t
 
     let cwd ((): unit) : t =
       Os.getcwd () |> PP.of_string
@@ -917,8 +953,11 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
         self
   end)
 
-module WindowsPath = MakePath(NormalAccessor)(WindowsPurePath)
-module PosixPath = MakePath(NormalAccessor)(PosixPurePath)
+module WindowsPath = MakePath(NormalAccessor)(WindowsPurePath_)
+module WindowsPurePath = WindowsPath.PurePath
+module PosixPath = MakePath(NormalAccessor)(PosixPurePath_)
+module PosixPurePath = PosixPath.PurePath
 
 let path : (module PATH) = if Sys.os_type = "Unix" then (module WindowsPath) else (module PosixPath)
 module Path : PATH = (val path)
+module PurePath = Path.PurePath
