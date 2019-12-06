@@ -6,7 +6,8 @@ let openfile = Unix.openfile
 let close = Unix.close
 let listdir : string -> string array = Sys.readdir
 let chmod = Unix.chmod
-
+let lchmod _pathobj _mode =
+    raise (Exn.NotImplementedError "lchmod() not available on this system")
 let mkdir = Unix.mkdir
 let unlink = Unix.unlink
 let link = Unix.link

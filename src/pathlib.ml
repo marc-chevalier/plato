@@ -306,8 +306,7 @@ module NormalAccessor =
     let listdir = Os.listdir
     let scandir = Os.scandir
     let chmod = Os.chmod
-    let lchmod _pathobj _mode =
-      raise (Exn.NotImplementedError "lchmod() not available on this system")
+    let lchmod = Os.lchmod
     let mkdir = Os.mkdir
     let unlink = Os.unlink
     let link_to = Os.link
@@ -652,6 +651,29 @@ module type PATH =
     val group: t -> string
     val open_with: t -> Unix.open_flag list -> Unix.file_perm -> (Unix.file_descr -> 'a) -> 'a
     val read: t -> string
+    val read_bytes: t -> bytes
+    val write: t -> string -> unit
+    val write_bytes: t -> bytes -> unit
+    val touch: ?mode: int -> ?exist_ok: bool  -> t -> unit
+    val mkdir: ?mode:int -> ?parents:bool -> ?exist_ok:bool -> t -> unit
+    val chmod: t -> Unix.file_perm -> unit
+    val lchmod: t -> Unix.file_perm -> unit
+    val unlink: ?missing_ok:bool -> t -> unit
+    val rmdir: t -> unit
+    val lstat: t -> Os.stat_results
+    val link_to: t -> t -> unit
+    val rename: t -> t -> t
+    val replace: t -> t -> t
+    val symlink: t -> t -> unit
+    val is_dir: t -> bool
+    val exists: t -> bool
+    val is_file: t -> bool
+    val is_symlink: t -> bool
+    val is_block_device: t -> bool
+    val is_char_device: t -> bool
+    val is_fifo: t -> bool
+    val is_socket: t -> bool
+    val expanduser: t -> t
   end)
 
 module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
@@ -749,14 +771,150 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
             | UnixLabels.Unix_error _ -> ()
         )
 
-    let read (self: t) : string =
+    let read_bytes (self: t) : bytes =
       let ic = self |> PP.to_string |> open_in in
       let n = in_channel_length ic in
       let s = Bytes.create n in
-      really_input ic s 0 n;
-      close_in ic;
-      Bytes.to_string s
+      let () = really_input ic s 0 n in
+      let () = close_in ic in
+      s
 
+    let read (self: t) : string =
+      self |> read_bytes |> Bytes.to_string
+
+    let write_bytes (self: t) (b: bytes) : unit =
+      let oc = self |> PP.to_string |> open_out in
+      let () = output_bytes oc b in
+      let () = close_out oc in
+      ()
+
+    let write (self: t) (s: string) : unit =
+      let oc = self |> PP.to_string |> open_out in
+      let () = output_string oc s in
+      let () = close_out oc in
+      ()
+
+    let touch ?(mode: int = 0o666) ?(exist_ok: bool = true) (self: t) : unit =
+      let finished =
+        if exist_ok then
+          match A.utime (PP.to_string self) 0. 0. with
+          | () -> true
+          | exception _ -> false
+        else
+          false
+      in
+      if finished then
+        ()
+      else
+        let flags = [Unix.O_CREAT; Unix.O_WRONLY] in
+        let flags =
+          if exist_ok then flags else Unix.O_EXCL :: flags
+        in
+        let fd = A.openfile (PP.to_string self) flags mode in
+        A.close fd
+
+
+    let ignore_error(code: Unix.error) : bool =
+      Stdlib.List.mem code Unix.[ENOENT; ENOTDIR; EBADF; ELOOP]
+
+    let is_dir (self: t) : bool =
+      match stat self with
+      | stat -> Stat.s_ISDIR stat
+      | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
+      | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
+
+    let rec mkdir ?(mode: int = 0o777) ?(parents: bool = false) ?(exist_ok: bool = false) (self: t) : unit =
+      match A.mkdir (PP.to_string self) mode with
+      | () -> ()
+      | exception Unix.(Unix_error(EEXIST, _, _) as e) when not exist_ok || is_dir self -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
+      | exception Unix.(Unix_error(EEXIST, _, _)) -> ()
+      | exception Unix.(Unix_error(ENOENT, _, _) as e) when not parents || PP.parent self = self ->  Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
+      | exception Unix.(Unix_error(ENOENT, _, _)) ->
+        let () = mkdir ~parents:true ~exist_ok:true (PP.parent self) in
+        let () = mkdir ~parents:false ~exist_ok self in
+        ()
+
+    let chmod (self: t) (mode: Unix.file_perm) : unit =
+      A.chmod (PP.to_string self) mode
+
+    let lchmod (self: t) (mode: Unix.file_perm) : unit =
+      A.lchmod (PP.to_string self) mode
+
+    let unlink ?(missing_ok: bool = false) (self: t) : unit =
+      match A.unlink (PP.to_string self) with
+      | () -> ()
+      | exception Unix.(Unix_error(ENOENT, _, _)) when missing_ok -> ()
+      | exception Unix.(Unix_error(ENOENT, _, _) as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
+
+    let rmdir (self: t) : unit =
+      self |> PP.to_string |> A.rmdir
+
+    let lstat (self: t) : Os.stat_results =
+      self |> PP.to_string |> A.lstat
+
+    let link_to (self: t) (target: t) : unit =
+      A.link_to (PP.to_string self) (PP.to_string target)
+
+    let rename (self: t) (target: t) : t =
+      let () = A.rename (PP.to_string self) (PP.to_string target) in
+      target
+
+    let replace (self: t) (target: t) : t =
+      let () = A.replace (PP.to_string self) (PP.to_string target) in
+      target
+
+    let symlink (self: t) (target: t) : unit =
+      A.symlink (PP.to_string self) (PP.to_string target)
+
+    let exists (self: t) : bool =
+      match stat self with
+      | _ -> true
+      | exception Unix.(Unix_error (code, _, _)) when ignore_error code -> false
+
+    let is_file (self: t) : bool =
+      match stat self with
+      | stat -> Stat.s_ISREG stat
+      | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
+      | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
+
+    let is_symlink (self: t) : bool =
+      match stat self with
+      | stat -> Stat.s_ISLNK stat
+      | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
+      | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
+
+    let is_block_device (self: t) : bool =
+      match stat self with
+      | stat -> Stat.s_ISBLK stat
+      | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
+      | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
+
+    let is_char_device (self: t) : bool =
+      match stat self with
+      | stat -> Stat.s_ISCHR stat
+      | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
+      | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
+
+    let is_fifo (self: t) : bool =
+      match stat self with
+      | stat -> Stat.s_ISFIFO stat
+      | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
+      | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
+
+    let is_socket (self: t) : bool =
+      match stat self with
+      | stat -> Stat.s_ISSOCK stat
+      | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
+      | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
+
+    let expanduser (self: t) : t =
+      if self.PP.drv = "" && self.PP.root = "" && match self.PP.parts with [] -> false | h::_ -> (Str.slice ~stop:1 h) = "~" then
+        let username = Str.slice ~start:1 (Stdlib.List.hd self.PP.parts) in
+        let username = if username = "" then None else Some username in
+        let homedir = PP.Flavour.gethomedir ?username () in
+        PP.of_strings (homedir::List.slice ~start:1 self.PP.parts)
+      else
+        self
   end)
 
 module WindowsPath = MakePath(NormalAccessor)(WindowsPurePath)
