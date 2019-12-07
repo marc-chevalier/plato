@@ -394,6 +394,7 @@ module type PURE_PATH =
     val (>): t -> t -> bool
     val ge: t -> t -> bool
     val (>=): t -> t -> bool
+    val compare: t -> t -> int
     val get_drive: t -> string
     val get_root: t -> string
     val anchor: t -> string
@@ -525,6 +526,11 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
       let cb = cparts b in
       ca >= cb
 
+    let compare (a: t) (b: t) : int =
+      let ca = cparts a in
+      let cb = cparts b in
+      compare ca cb
+
     let get_drive ({drv; _}: t) : string = drv
     let get_root ({root; _}: t) : string = root
 
@@ -533,6 +539,7 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
 
     let name ({root; drv; parts; _}: t) : string =
       match parts, drv, root with
+      | [a], "", "" -> a
       | [], _, _
       | [_], "", _
       | [_], _, "" -> ""

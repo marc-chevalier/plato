@@ -27,6 +27,7 @@ module type PURE_PATH =
     val (>): t -> t -> bool
     val ge: t -> t -> bool
     val (>=): t -> t -> bool
+    val compare: t -> t -> int
     val get_drive: t -> string
     val get_root: t -> string
     val anchor: t -> string
