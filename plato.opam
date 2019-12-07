@@ -4,6 +4,8 @@ version: "1.0.0"
 synopsis: "Python Library Adapted To OCaml"
 maintainer: "Marc Chevalier <marc.chevalier@ens.fr>"
 authors: "Marc Chevalier <marc.chevalier@ens.fr>"
+homepage: "https://gitlab.goji.ens.fr/marc/plato"
+bug-reports: "https://gitlab.goji.ens.fr/marc/plato/issues"
 depends: [
   "ocaml" {>= "4.08.0"}
   "dune" {>= "2.0.0"}
