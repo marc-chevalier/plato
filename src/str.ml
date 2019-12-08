@@ -22,16 +22,21 @@ let endswith (suffix: string) (s: string) : bool =
   else
     suffix = String.sub s (String.length s - String.length suffix) (String.length suffix)
 
-let split ?(sep: string = "") s =
+let split ?(sep: string option) s : string list =
   let r = ref [] in
   let j = ref (String.length s) in
+  let sep, o = match sep with Some sep -> sep, true | None -> " ", false in
   for i = String.length s - 1 downto 0 do
     if String.(contains sep (unsafe_get s i)) then begin
       r := String.sub s (i + 1) (!j - i - 1) :: !r;
       j := i
     end
   done;
-  String.sub s 0 !j :: !r
+  let res = String.sub s 0 !j :: !r in
+  if o then
+    res
+  else
+    Stdlib.List.filter ((<>) "") res
 
 let slice ?(start: int option) ?(stop: int option) ?(step: int = 1) (s: string) : string =
   Helpers.Slice.slice ?start ?stop ~step String.length ~sub:String.sub
