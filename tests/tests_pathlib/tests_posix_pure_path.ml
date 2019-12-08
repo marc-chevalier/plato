@@ -180,6 +180,51 @@ let test_with_suffix : test =
   "test_with_suffix" >::: List.map make_tests test_cases
 
 
+let test_relative_to : test =
+  let module PPP = Plato.Pathlib.PosixPurePath in
+  let test_cases : (string * string * string) list = [
+    "/etc/passwd", "/", "etc/passwd";
+  ]
+  in
+  let make_tests (a, b, result: string * string * string) : test =
+    let case _ =
+      let out =
+        PPP.relative_to
+          (PPP.of_string a)
+          (PPP.of_string b)
+      in
+      assert_equal
+        ~cmp:PPP.eq
+        ~printer:PPP.to_string
+        (PPP.of_string result) out
+    in
+    a ^ "->" ^ b >:: case
+  in
+  "test_relative_to" >::: List.map make_tests test_cases
+
+
+let test_relative_to_fail : test =
+  let module PPP = Plato.Pathlib.PosixPurePath in
+  let test_cases : (string * string) list = [
+    "/etc", "/usr";
+  ]
+  in
+  let make_tests (a, b : string * string) : test =
+    let case _ =
+      let out () =
+        PPP.relative_to
+          (PPP.of_string a)
+          (PPP.of_string b)
+      in
+      assert_raises
+        (Plato.Exn.ValueError (Format.asprintf "%s does not start with %s" a b))
+        out
+    in
+    a ^ "->" ^ b >:: case
+  in
+  "test_relative_to_fail" >::: List.map make_tests test_cases
+
+
 let test_posix_pure_path : test =
   "posix_pure_path" >::: [
     test_of_string;
@@ -190,4 +235,6 @@ let test_posix_pure_path : test =
     test_with_name;
     test_with_name_fail;
     test_with_suffix;
+    test_relative_to;
+    test_relative_to_fail;
   ]
