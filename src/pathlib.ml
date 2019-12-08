@@ -404,6 +404,7 @@ module type PURE_PATH =
     val stem: t -> string
     val with_name: t -> string -> t
     val with_suffix: t -> string -> t
+    val relative_to: t -> t -> t
     val is_relative_to: t -> t -> bool
     val parts: t -> string list
     val joinpath: t -> t -> t
