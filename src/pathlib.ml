@@ -1,4 +1,4 @@
-[@@@warning "+A"]
+[@@@warning "@A"]
 
 module type FLAVOUR_PARAM =
   (sig
@@ -675,6 +675,10 @@ module type PATH =
 
     val to_purepath: t -> PurePath.t
     val of_purepath: PurePath.t -> t
+    val of_paths: t list -> t
+    val of_strings: string list -> t
+    val of_string: string -> t
+    val to_string: t -> string
     val cwd: unit -> t
     val home: unit -> t
     val samefile: t -> t -> bool
@@ -723,6 +727,18 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
 
     let of_purepath (t: PP.t) : t =
       t
+
+    let of_paths (l: t list) : t =
+      PP.of_paths l
+
+    let of_strings (l: string list) : t =
+      PP.of_strings l
+
+    let of_string (s: string) : t =
+      PP.of_string s
+
+    let to_string (a: t) : string =
+      PP.to_string a
 
     let cwd ((): unit) : t =
       Os.getcwd () |> PP.of_string

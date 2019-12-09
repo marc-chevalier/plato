@@ -1,5 +1,6 @@
-include GenericPath
+[@@@warning "@A"]
 
+include GenericPath
 
 let sep = '/'
 let sep_s : string = String.make 1 sep

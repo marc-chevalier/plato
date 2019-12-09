@@ -1,3 +1,5 @@
+[@@@warning "@A"]
+
 open OUnit2
 
 let make_test (type a) (name: string)

@@ -1,4 +1,4 @@
-[@@@warning "+A"]
+[@@@warning "@A"]
 
 let translate_bound (n: int option) (l: int) (left: bool) : int =
   match left, n with
@@ -39,8 +39,10 @@ let split ?(sep: string option) s : string list =
     Stdlib.List.filter ((<>) "") res
 
 let slice ?(start: int option) ?(stop: int option) ?(step: int = 1) (s: string) : string =
-  Helpers.Slice.slice ?start ?stop ~step String.length ~sub:String.sub
-    String.get (`I (fun i c b -> Bytes.set b i c)) (fun l -> Bytes.make l ' ') (Bytes.to_string) s
+  Helpers.Slice.slice
+    ?start ?stop ~step ~sub:String.sub
+    String.length String.get
+    (Helpers.Slice.Set (fun i c b -> Bytes.set b i c)) (fun l -> Bytes.make l ' ') Bytes.to_string s
 
 let find ?(start: int option) ?(stop: int option) (sub: string) (s: string) : int =
   let l = String.length s in

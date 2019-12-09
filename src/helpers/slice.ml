@@ -1,7 +1,14 @@
+[@@@warning "@A"]
+
+type ('elt, 'list) concat =
+  | ConcatLeft of ('elt -> 'list -> 'list)
+  | ConcatRight of ('list -> 'elt -> 'list)
+  | Set of (int -> 'elt -> 'list -> unit)
+
 let slice (type a b c)
     ?(start: int option) ?(stop: int option) ?(step: int = 1)
-    (length: a -> int) ?(sub: (a -> int -> int -> a) option) (get: a -> int -> b)
-    (concat: [`L of b -> c -> c | `R of c -> b -> c | `I of int -> b -> c -> unit]) (empty: int -> c) (post: c -> a) (s: a) : a =
+    ?(sub: (a -> int -> int -> a) option) (length: a -> int) (get: a -> int -> b)
+    (concat: (b, c) concat) (empty: int -> c) (post: c -> a) (s: a) : a =
   let l = length s in
   let start =
     match start with
@@ -45,17 +52,17 @@ let slice (type a b c)
     in
     let res =
       match concat with
-      | `L concat ->
+      | ConcatLeft concat ->
         List.fold_left
           (fun acc i -> concat (get s i) acc)
           (empty !len)
           !l
-      | `R concat ->
+      | ConcatRight concat ->
         List.fold_right
           (fun i acc -> concat acc (get s i))
           !l
           (empty !len)
-      | `I set ->
+      | Set set ->
         let res = empty !len in
         List.iteri
           (fun it idx -> set (!len - it - 1) (get s idx) res)

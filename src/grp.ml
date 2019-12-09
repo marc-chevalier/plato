@@ -1,3 +1,5 @@
+[@@@warning "@A"]
+
 type struct_group = {
   gr_name: string;
   gr_passwd: string;

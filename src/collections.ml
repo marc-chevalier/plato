@@ -1,3 +1,5 @@
+[@@@warning "@A"]
+
 module Abc =
   (struct
     module type CONTAINER =

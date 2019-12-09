@@ -1,21 +1,52 @@
+[@@@warning "@A"]
+
 type stat_results = Unix.stats
 
-let stat : string -> stat_results = Unix.stat
-let lstat : string -> stat_results = Unix.lstat
+let stat (filename: string) : stat_results =
+  match Unix.stat filename with
+  | stat -> stat
+  | exception Unix.Unix_error (Unix.ENOENT, _, filename) ->
+    raise (
+      Exn.FileNotFoundError (
+        Format.asprintf "No such file or directory: '%s'" filename)
+    )
+
+let lstat (filename: string) : stat_results =
+  match Unix.lstat filename with
+  | stat -> stat
+  | exception Unix.Unix_error (Unix.ENOENT, _, filename) ->
+    raise (
+      Exn.FileNotFoundError (
+        Format.asprintf "No such file or directory: '%s'" filename)
+    )
+
 let openfile = Unix.openfile
+
 let close = Unix.close
+
 let listdir : string -> string array = Sys.readdir
+
 let chmod = Unix.chmod
+
 let lchmod _pathobj _mode =
-    raise (Exn.NotImplementedError "lchmod() not available on this system")
+  raise (Exn.NotImplementedError "lchmod() not available on this system")
+
 let mkdir = Unix.mkdir
+
 let unlink = Unix.unlink
+
 let link = Unix.link
+
 let rmdir = Unix.rmdir
+
 let rename = Unix.rename
+
 let replace = Unix.rename
+
 let symlink = Unix.link
+
 let utime = Unix.utimes
+
 let readlink = Unix.readlink
 
 let getcwd = Sys.getcwd
@@ -55,13 +86,15 @@ module DirEntry =
     let path ({path; name; _} : t) : string =
       Path.join path [name]
     let inode ({stat; _} : t) : int =
-      stat.st_ino
+      stat.Unix.st_ino
     let is_dir ?(follow_symlinks: bool = true) (t: t) : bool =
+      let open Unix in
       match follow_symlinks, t with
       | true, {symlink = None; stat; _} -> stat.st_kind = S_DIR
       | true, {symlink = Some s; _} -> s.st_kind = S_DIR
       | false, {stat; _} -> stat.st_kind = S_DIR
     let is_file ?(follow_symlinks: bool = true) (t: t) : bool =
+      let open Unix in
       match follow_symlinks, t with
       | true, {symlink = None; stat; _} -> stat.st_kind = S_REG
       | true, {symlink = Some s; _} -> s.st_kind = S_REG
@@ -79,11 +112,11 @@ let scandir ?(path: string = ".") ((): unit) : DirEntry.t array =
   let files = listdir path in
   let make_dir_entry (filename: string) : DirEntry.t =
     let link_stat = Path.join path [filename] |> lstat in
-    if link_stat.st_kind = S_LNK then
+    if Unix.(link_stat.st_kind = S_LNK) then
       let target = Path.join path [filename] |> Unix.readlink in
       let stat = stat target in
-      {name = filename; path = path; stat; symlink = Some link_stat}
+      {DirEntry.name = filename; path; stat; symlink = Some link_stat}
     else
-      {name = filename; path = path; stat = link_stat; symlink = None}
+      {DirEntry.name = filename; path; stat = link_stat; symlink = None}
   in
   Array.map make_dir_entry files

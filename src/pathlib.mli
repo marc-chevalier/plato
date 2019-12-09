@@ -1,4 +1,4 @@
-[@@@warning "+A"]
+[@@@warning "@A"]
 
 module type PATH_PARENTS =
   (sig
@@ -56,6 +56,10 @@ module type PATH =
 
     val to_purepath: t -> PurePath.t
     val of_purepath: PurePath.t -> t
+    val of_paths: t list -> t
+    val of_strings: string list -> t
+    val of_string: string -> t
+    val to_string: t -> string
     val cwd: unit -> t
     val home: unit -> t
     val samefile: t -> t -> bool
