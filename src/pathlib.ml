@@ -987,6 +987,6 @@ module WindowsPurePath = WindowsPath.PurePath
 module PosixPath = MakePath(NormalAccessor)(PosixPurePath_)
 module PosixPurePath = PosixPath.PurePath
 
-let path : (module PATH) = if Sys.os_type = "Unix" then (module WindowsPath) else (module PosixPath)
+let path : (module PATH) = if Sys.os_type = "Unix" then (module PosixPath) else (module WindowsPath)
 module Path : PATH = (val path)
 module PurePath = Path.PurePath
