@@ -673,6 +673,8 @@ module type PATH =
 
     type t
 
+    include PURE_PATH with type t := t
+
     val to_purepath: t -> PurePath.t
     val of_purepath: PurePath.t -> t
     val of_paths: t list -> t
@@ -720,6 +722,8 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
 
     module PurePath = PP
 
+    include PP
+
     type t = PP.t
 
     let to_purepath (t: t) : PP.t =
@@ -754,7 +758,7 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
 
     let iterdir (self: t) : t Array.t =
       let dir = self |> PP.to_string |> A.listdir in
-      Array.map PP.(fun name -> make_t self.drv self.root (self.parts @ [name])) dir
+      Array.map (fun name -> make_t self.drv self.root (self.parts @ [name])) dir
 
     let absolute (self: t) : t =
       if PP.is_absolute self then
@@ -777,6 +781,7 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
         let path =
           Stdlib.List.fold_left
             (fun path name ->
+               let open! Stdlib in
                if name = "" || name = "." then
                  path
                else if name = ".." then
@@ -968,9 +973,9 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
       | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
 
     let expanduser (self: t) : t =
-      if self.PP.drv = "" && self.PP.root = "" && match self.PP.parts with [] -> false | h::_ -> (Str.slice ~stop:1 h) = "~" then
+      if String.equal self.PP.drv "" && String.equal self.PP.root "" && match self.PP.parts with [] -> false | h::_ -> String.equal (Str.slice ~stop:1 h) "~" then
         let username = Str.slice ~start:1 (Stdlib.List.hd self.PP.parts) in
-        let username = if username = "" then None else Some username in
+        let username = if String.equal username "" then None else Some username in
         let homedir = PP.Flavour.gethomedir ?username () in
         PP.of_strings (homedir::List.slice ~start:1 self.PP.parts)
       else

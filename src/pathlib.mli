@@ -54,6 +54,8 @@ module type PATH =
 
     type t
 
+    include PURE_PATH with type t := t
+
     val to_purepath: t -> PurePath.t
     val of_purepath: PurePath.t -> t
     val of_paths: t list -> t
