@@ -95,7 +95,6 @@ let normpath (path: string) : string  =
         prefix, path
     in
     let comps = String.split_on_char sep path in
-
     let comps =
       Stdlib.List.fold_left
         (fun comps comp ->
@@ -114,6 +113,7 @@ let normpath (path: string) : string  =
         []
         comps
     in
+    let comps = Stdlib.List.rev comps in
     let comps =
       if prefix == "" && comps == [] then
         comps @ [curdir]
