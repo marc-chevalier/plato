@@ -16,7 +16,7 @@ let getpwuid (uid: int) : struct_passwd =
     match Stdlib.input_line i with
     | exception End_of_file -> Stdlib.close_in i; raise (Exn.KeyError (Format.asprintf "getpwuid(): uid not found: %d" uid))
     | s ->
-      match String.split_on_char ':' s with
+      match Stdlib.String.split_on_char ':' s with
       | name :: passwd :: uid_ :: gid ::gcos :: dir :: shell :: [] ->
         if uid = int_of_string uid_ then
           {
@@ -40,7 +40,7 @@ let getpwname (name: string) : struct_passwd =
     match Stdlib.input_line i with
     | exception End_of_file -> Stdlib.close_in i; raise (Exn.KeyError (Format.asprintf "getpwname(): name not found: \"%s\"" name))
     | s ->
-      match String.split_on_char ':' s with
+      match Stdlib.String.split_on_char ':' s with
       | name_ :: passwd :: uid :: gid ::gcos :: dir :: shell :: [] ->
         if name = name_ then
           {
@@ -64,7 +64,7 @@ let getpwall () : struct_passwd list =
     match Stdlib.input_line i with
     | exception End_of_file -> Stdlib.close_in i; acc
     | s ->
-      match String.split_on_char ':' s with
+      match Stdlib.String.split_on_char ':' s with
       | name :: passwd :: uid :: gid ::gcos :: dir :: shell :: [] ->
         aux ({
             pw_name = name;

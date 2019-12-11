@@ -2,6 +2,14 @@
 
 let len = Stdlib.List.length
 
+let get (type a) (s: a list) (pos: int) : a =
+  let l = len s in
+  if l <= pos || pos < ~-l then
+    raise (Exn.IndexError "list index out of range")
+  else
+    let pos = if pos >= 0 then pos else l + pos in
+    Stdlib.List.nth s pos
+
 let slice (type a) ?(start: int option) ?(stop: int option) ?(step: int = 1) (l: a list) : a list =
   if stop = None && step = 1 then
     let rec aux i l =

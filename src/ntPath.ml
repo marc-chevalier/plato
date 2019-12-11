@@ -3,10 +3,10 @@
 include GenericPath
 
 let sep = '\\'
-let sep_s : string = String.make 1 sep
+let sep_s : string = Stdlib.String.make 1 sep
 
 let altsep = Some '/'
-let altsep_s : string  option = match altsep with None -> None | Some altsep -> Some (String.make 1 altsep)
+let altsep_s : string  option = match altsep with None -> None | Some altsep -> Some (Stdlib.String.make 1 altsep)
 
 let replace_altsep (s: string) : string = 
   match altsep_s with
@@ -14,10 +14,10 @@ let replace_altsep (s: string) : string =
   | Some altsep_s -> NoPlato.Str.(global_replace (regexp_string altsep_s) "\\\\" s)
 
 let splitdrive (p: string) : string * string =
-  if String.length p >= 2 then
+  if Str.len p >= 2 then
     let colon = ":" in
     let normp = replace_altsep p in
-    if Str.slice ~start:0 ~stop:2 normp = String.make 2 sep && Str.slice ~start:2 ~stop:3 normp <> sep_s then
+    if Str.slice ~start:0 ~stop:2 normp = Stdlib.String.make 2 sep && Str.slice ~start:2 ~stop:3 normp <> sep_s then
       let index = Str.find ~start:2 sep_s normp in
       if index = -1 then
         "", p
@@ -44,7 +44,7 @@ let join (path: string) (paths: string list) : string =
     Stdlib.List.fold_left
       (fun (result_drive, result_path) p ->
          let p_drive, p_path = splitdrive p in
-         if p_path <> "" && String.contains seps p_path.[0] then
+         if p_path <> "" && Stdlib.String.contains seps (Str.get p_path 0) then
            let result_drive =
              if p_drive <> "" || result_drive = "" then
                p_drive
@@ -54,7 +54,7 @@ let join (path: string) (paths: string list) : string =
            result_drive, p_path
          else
            let result_drive, result_path, finished =
-             if String.lowercase_ascii result_drive <> String.lowercase_ascii p_drive then
+             if Stdlib.String.lowercase_ascii result_drive <> Stdlib.String.lowercase_ascii p_drive then
                p_drive, p_path, true
              else
                p_drive, result_path, false
@@ -63,7 +63,7 @@ let join (path: string) (paths: string list) : string =
              result_drive, result_path
            else
              let result_path =
-               if result_path <> "" && not (String.contains seps (result_path.[String.length result_path - 1])) then
+               if result_path <> "" && not (Stdlib.String.contains seps (Str.get result_path ~-1)) then
                  result_path ^ sep_s
                else
                  result_path
@@ -74,7 +74,7 @@ let join (path: string) (paths: string list) : string =
       (result_drive, result_path)
       paths
   in
-  if result_path <> "" && not (String.contains seps (result_path.[0])) && result_drive <> "" && Str.slice ~start:~-1 result_drive <> colon then
+  if result_path <> "" && not (Stdlib.String.contains seps (Str.get result_path 0)) && result_drive <> "" && Str.slice ~start:~-1 result_drive <> colon then
     result_drive ^ sep_s ^ result_path
   else
     result_drive ^ result_path
@@ -94,7 +94,7 @@ let normpath (path: string) : string  =
       else
         prefix, path
     in
-    let comps = String.split_on_char sep path in
+    let comps = Stdlib.String.split_on_char sep path in
     let comps =
       Stdlib.List.fold_left
         (fun comps comp ->
@@ -120,5 +120,5 @@ let normpath (path: string) : string  =
       else
         comps
     in
-    let join : string list -> string = String.concat sep_s in
+    let join : string list -> string = Stdlib.String.concat sep_s in
     prefix ^ join comps

@@ -58,7 +58,7 @@ module type PATH =
     val normpath: string -> string
   end)
 
-let path : (module PATH) = if Sys.os_type = "Unix" then (module PosixPath) else (module NtPath)
+let path : (module PATH) = if Sys.unix then (module PosixPath) else (module NtPath)
 module Path : PATH = (val path)
 
 module type DIR_ENTRY =

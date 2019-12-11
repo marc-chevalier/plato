@@ -3,7 +3,7 @@
 include GenericPath
 
 let sep = '/'
-let sep_s : string = String.make 1 sep
+let sep_s : string = Stdlib.String.make 1 sep
 
 let join (a: string) (p: string list) : string =
   let sep = "/" in
@@ -28,14 +28,14 @@ let normpath (path: string) : string =
   else
     let initial_slashes = Str.startswith sep_s path in
     let initial_slashes =
-      if initial_slashes && Str.startswith (String.make 2 sep) path && not (Str.startswith (String.make 3 sep) path) then
+      if initial_slashes && Str.startswith (Stdlib.String.make 2 sep) path && not (Str.startswith (Stdlib.String.make 3 sep) path) then
         2
       else if initial_slashes then
         1
       else
         0
     in
-    let comps = String.split_on_char sep path in
+    let comps = Stdlib.String.split_on_char sep path in
     let new_comps =
       Stdlib.List.fold_left
         (fun new_comps comp ->
@@ -53,9 +53,9 @@ let normpath (path: string) : string =
         comps
     in
     let comps = Stdlib.List.rev new_comps in
-    let join : string list -> string = String.concat sep_s in
+    let join : string list -> string = Stdlib.String.concat sep_s in
     let path = join comps in
-    let path = (String.make initial_slashes sep)^path in
+    let path = (Stdlib.String.make initial_slashes sep)^path in
     if path != "" then
       path
     else

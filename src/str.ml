@@ -1,5 +1,17 @@
 [@@@warning "@A"]
 
+module String = Stdlib.String
+
+let len = Stdlib.String.length
+
+let get (s: string) (pos: int) : char =
+  let l = len s in
+  if l <= pos || pos < ~-l then
+    raise (Exn.IndexError "string index out of range")
+  else
+    let pos = if pos >= 0 then pos else l + pos in
+    Stdlib.String.get s pos
+
 let translate_bound (n: int option) (l: int) (left: bool) : int =
   match left, n with
   | true, None -> 0
@@ -77,7 +89,7 @@ let rstrip ?(chars: string = " ") (s: string) : string =
 let partition (sep: string) (s: string) : string * string * string =
   let open NoPlato.Str in
   let l : split_result list = full_split (regexp_string sep) s in
-  let join (l: split_result list) : string=
+  let join (l: split_result list) : string =
     l
     |> Stdlib.List.map (function Text t -> t | Delim t -> t)
     |> String.concat ""
@@ -93,7 +105,7 @@ let partition (sep: string) (s: string) : string * string * string =
 let rpartition (sep: string) (s: string) : string * string * string =
   let open NoPlato.Str in
   let l : split_result list = full_split (regexp_string sep) s in
-  let join (l: split_result list) : string=
+  let join (l: split_result list) : string =
     l
     |> Stdlib.List.map (function Text t -> t | Delim t -> t)
     |> String.concat ""

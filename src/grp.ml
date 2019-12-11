@@ -13,10 +13,10 @@ let getgrnam (name: string) : struct_group =
     match Stdlib.input_line i with
     | exception End_of_file -> Stdlib.close_in i; raise (Exn.KeyError (Format.asprintf "getgrnam(): name not found: %s" name))
     | s ->
-      match String.split_on_char ':' s with
+      match Stdlib.String.split_on_char ':' s with
       | name_ :: passwd :: gid :: mem :: [] ->
         if name = name_ then
-          let mem = String.split_on_char ',' mem in
+          let mem = Stdlib.String.split_on_char ',' mem in
           let mem = Stdlib.List.filter ((<>) "") mem in
           {
             gr_name = name;
@@ -36,10 +36,10 @@ let getgrgid (gid: int) : struct_group =
     match Stdlib.input_line i with
     | exception End_of_file -> Stdlib.close_in i; raise (Exn.KeyError (Format.asprintf "getgrgid(): gid not found: %d" gid))
     | s ->
-      match String.split_on_char ':' s with
+      match Stdlib.String.split_on_char ':' s with
       | name :: passwd :: gid_ :: mem :: [] ->
         if gid = int_of_string gid_ then
-          let mem = String.split_on_char ',' mem in
+          let mem = Stdlib.String.split_on_char ',' mem in
           let mem = Stdlib.List.filter ((<>) "") mem in
           {
             gr_name = name;
@@ -59,9 +59,9 @@ let getgrall ((): unit) : struct_group list =
     match Stdlib.input_line i with
     | exception End_of_file -> Stdlib.close_in i; acc
     | s ->
-      match String.split_on_char ':' s with
+      match Stdlib.String.split_on_char ':' s with
       | name :: passwd :: gid :: mem :: [] ->
-        let mem = String.split_on_char ',' mem in
+        let mem = Stdlib.String.split_on_char ',' mem in
         let mem = Stdlib.List.filter ((<>) "") mem in
         aux ({
           gr_name = name;
