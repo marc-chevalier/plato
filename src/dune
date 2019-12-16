@@ -1,5 +1,5 @@
 (library
  (name        plato)
  (public_name plato)
- (libraries noPlato helpers)
+ (libraries re noPlato helpers)
 )

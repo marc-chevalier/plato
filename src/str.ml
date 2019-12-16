@@ -86,6 +86,9 @@ let rstrip ?(chars: string = " ") (s: string) : string =
   done;
   NoPlato.Str.string_before s !i
 
+let strip ?(chars: string = " ") (s: string) : string =
+  s |> lstrip ~chars |> rstrip ~chars
+
 let partition (sep: string) (s: string) : string * string * string =
   let open NoPlato.Str in
   let l : split_result list = full_split (regexp_string sep) s in
@@ -117,3 +120,21 @@ let rpartition (sep: string) (s: string) : string * string * string =
   | Text after :: Delim sep :: q -> q |> Stdlib.List.rev |> join, sep, after
   | Text _ :: Text _ :: _ -> failwith "absurd"
   | Delim sep :: q -> join q, sep, ""
+
+let replace (old: string) (new_: string) (s: string) : string =
+  NoPlato.Str.(global_replace (regexp_string old) (quote new_) s)
+
+let isspace (s: string) : bool =
+  if len s = 0 then
+    false
+  else
+    let exception False in
+    match String.iter (fun c -> if Stdlib.String.contains " \t\n\r\x0b\x0c" c |> not then raise False) s with
+    | () -> true
+    | exception False -> false
+
+let at (s: string) (n: int) : string =
+  Stdlib.String.make 1 s.[n]
+
+let bool (s: string) : bool =
+  s <> ""
