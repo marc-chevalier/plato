@@ -681,7 +681,7 @@ module type PATH =
     val cwd: unit -> t
     val home: unit -> t
     val samefile: t -> t -> bool
-    val iterdir: t -> t Array.t
+    val iterdir: t -> t Stdlib.Array.t
     val absolute: t -> t
     val resolve: ?strict:bool -> t -> t
     val stat: t -> Os.stat_results
@@ -753,9 +753,9 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
     let samefile (self: t) (other: t) : bool =
       Os.Path.same_stat (stat self) (stat other)
 
-    let iterdir (self: t) : t Array.t =
+    let iterdir (self: t) : t Stdlib.Array.t =
       let dir = self |> PP.to_string |> A.listdir in
-      Array.map (fun name -> make_t self.drv self.root (self.parts @ [name])) dir
+      Stdlib.Array.map (fun name -> make_t self.drv self.root (self.parts @ [name])) dir
 
     let absolute (self: t) : t =
       if PP.is_absolute self then
