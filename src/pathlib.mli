@@ -65,7 +65,7 @@ module type PATH =
     val cwd: unit -> t
     val home: unit -> t
     val samefile: t -> t -> bool
-    val iterdir: t -> t Stdlib.Array.t
+    val iterdir: t -> t Stdcompat.Array.t
     val absolute: t -> t
     val resolve: ?strict:bool -> t -> t
     val stat: t -> Os.stat_results

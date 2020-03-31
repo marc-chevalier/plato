@@ -205,7 +205,7 @@ module Abc =
             iter f other
           let clear (t: t) : unit =
             let keys = fold (fun k _ l -> k :: l) t [] in
-            Stdlib.List.iter (fun k -> delitem k t) keys
+            Stdcompat.List.iter (fun k -> delitem k t) keys
           let pop (k: key) (t: t) : out_value =
             match getitem k t with
             | value -> delitem k t; value
@@ -243,10 +243,10 @@ module Abc =
             | value -> Some value
             | exception Exn.KeyError _ -> None
         end)
-    module MutableMappingOfHashtbl(P: sig type key include Stdlib.Hashtbl.HashedType with type t := key type value end)
+    module MutableMappingOfHashtbl(P: sig type key include Stdcompat.Hashtbl.HashedType with type t := key type value end)
       :
         (sig
-          module H: Stdlib.Hashtbl.S with type key = P.key
+          module H: Stdcompat.Hashtbl.S with type key = P.key
           include MUTABLE_MAPPING
             with type key = P.key
              and type in_value = P.value
@@ -259,7 +259,7 @@ module Abc =
         type in_value = P.value
         type out_value = P.value
         type value = out_value
-        module H = Stdlib.Hashtbl.Make(struct type t = key let hash = P.hash let equal = P.equal end)
+        module H = Stdcompat.Hashtbl.Make(struct type t = key let hash = P.hash let equal = P.equal end)
         type t = value H.t
 
         include BuildMutableMapping
@@ -363,7 +363,7 @@ module Abc =
             iter f other
           let clear (type value) (t: value t) : unit =
             let keys = fold (fun k _ l -> k :: l) t [] in
-            Stdlib.List.iter (fun k -> delitem k t) keys
+            Stdcompat.List.iter (fun k -> delitem k t) keys
           let pop (type value) (k: key) (t: value t) : value =
             match getitem k t with
             | value -> delitem k t; value
@@ -401,10 +401,10 @@ module Abc =
             | value -> Some value
             | exception Exn.KeyError _ -> None
         end)
-    module PolymorphicMutableMappingOfHashtbl(P: sig type key include Stdlib.Hashtbl.HashedType with type t := key end)
+    module PolymorphicMutableMappingOfHashtbl(P: sig type key include Stdcompat.Hashtbl.HashedType with type t := key end)
       :
         (sig
-          module H: Stdlib.Hashtbl.S with type key = P.key
+          module H: Stdcompat.Hashtbl.S with type key = P.key
           include POLYMORPHIC_MUTABLE_MAPPING
             with type key = P.key
              and type 'value t = 'value H.t
@@ -412,7 +412,7 @@ module Abc =
       =
       (struct
         type key = P.key
-        module H = Stdlib.Hashtbl.Make(struct type t = key let hash = P.hash let equal = P.equal end)
+        module H = Stdcompat.Hashtbl.Make(struct type t = key let hash = P.hash let equal = P.equal end)
         type 'value t = 'value H.t
 
         include BuildPolymorphicMutableMapping

@@ -9,8 +9,8 @@ let punctuation = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 let printable = digits ^ ascii_letters ^ punctuation ^ whitespace
 
 let capwords ?(sep: string option) (s: string) : string =
-  Stdlib.String.concat
+  Stdcompat.String.concat
     (match sep with Some sep -> sep | None -> " ")
     (Str.split ?sep s
-     |> Stdlib.List.map Stdlib.String.lowercase_ascii
-     |> Stdlib.List.map Stdlib.StringLabels.capitalize_ascii)
+     |> Stdcompat.List.map Stdcompat.String.lowercase_ascii
+     |> Stdcompat.List.map Stdcompat.StringLabels.capitalize_ascii)

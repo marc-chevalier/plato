@@ -1,2 +1,5 @@
+1.1.0 (31-01-2020):
+- Support OCaml >= 4.06.0 (add dep to stdcompat and cppo)
+
 1.0.0 (31-03-2020):
 - First release

@@ -1,8 +1,8 @@
 [@@@warning "@A"]
 
-module String = Stdlib.String
+module String = Stdcompat.String
 
-let len = Stdlib.String.length
+let len = Stdcompat.String.length
 
 let get (s: string) (pos: int) : char =
   let l = len s in
@@ -10,7 +10,7 @@ let get (s: string) (pos: int) : char =
     raise (Exn.IndexError "string index out of range")
   else
     let pos = if pos >= 0 then pos else l + pos in
-    Stdlib.String.get s pos
+    Stdcompat.String.get s pos
 
 let translate_bound (n: int option) (l: int) (left: bool) : int =
   match left, n with
@@ -48,7 +48,7 @@ let split ?(sep: string option) s : string list =
   if o then
     res
   else
-    Stdlib.List.filter ((<>) "") res
+    Stdcompat.List.filter ((<>) "") res
 
 let slice ?(start: int option) ?(stop: int option) ?(step: int = 1) (s: string) : string =
   Helpers.Slice.slice
@@ -94,7 +94,7 @@ let partition (sep: string) (s: string) : string * string * string =
   let l : split_result list = full_split (regexp_string sep) s in
   let join (l: split_result list) : string =
     l
-    |> Stdlib.List.map (function Text t -> t | Delim t -> t)
+    |> Stdcompat.List.map (function Text t -> t | Delim t -> t)
     |> String.concat ""
   in
   match l with
@@ -110,14 +110,14 @@ let rpartition (sep: string) (s: string) : string * string * string =
   let l : split_result list = full_split (regexp_string sep) s in
   let join (l: split_result list) : string =
     l
-    |> Stdlib.List.map (function Text t -> t | Delim t -> t)
+    |> Stdcompat.List.map (function Text t -> t | Delim t -> t)
     |> String.concat ""
   in
-  match Stdlib.List.rev l with
+  match Stdcompat.List.rev l with
   | [] -> "", "", ""
   | [Text t] -> "", "", t
   | [Delim t] -> "", t, ""
-  | Text after :: Delim sep :: q -> q |> Stdlib.List.rev |> join, sep, after
+  | Text after :: Delim sep :: q -> q |> Stdcompat.List.rev |> join, sep, after
   | Text _ :: Text _ :: _ -> failwith "absurd"
   | Delim sep :: q -> join q, sep, ""
 
@@ -129,12 +129,12 @@ let isspace (s: string) : bool =
     false
   else
     let exception False in
-    match String.iter (fun c -> if Stdlib.String.contains " \t\n\r\x0b\x0c" c |> not then raise False) s with
+    match String.iter (fun c -> if Stdcompat.String.contains " \t\n\r\x0b\x0c" c |> not then raise False) s with
     | () -> true
     | exception False -> false
 
 let at (s: string) (n: int) : string =
-  Stdlib.String.make 1 s.[n]
+  Stdcompat.String.make 1 s.[n]
 
 let bool (s: string) : bool =
   s <> ""

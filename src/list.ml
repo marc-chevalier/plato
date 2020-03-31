@@ -1,6 +1,6 @@
 [@@@warning "@A"]
 
-let len = Stdlib.List.length
+let len = Stdcompat.List.length
 
 let get (type a) (s: a list) (pos: int) : a =
   let l = len s in
@@ -8,7 +8,7 @@ let get (type a) (s: a list) (pos: int) : a =
     raise (Exn.IndexError "list index out of range")
   else
     let pos = if pos >= 0 then pos else l + pos in
-    Stdlib.List.nth s pos
+    Stdcompat.List.nth s pos
 
 let slice (type a) ?(start: int option) ?(stop: int option) ?(step: int = 1) (l: a list) : a list =
   if stop = None && step = 1 then
@@ -25,5 +25,5 @@ let slice (type a) ?(start: int option) ?(stop: int option) ?(step: int = 1) (l:
     let open Helpers.Slice in
     slice
       ?start ?stop ~step
-      Stdlib.List.length Stdlib.List.nth
+      Stdcompat.List.length Stdcompat.List.nth
       (ConcatLeft (fun c s -> c::s)) (fun _ -> []) (fun x -> x) l

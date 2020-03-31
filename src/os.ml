@@ -119,4 +119,4 @@ let scandir ?(path: string = ".") ((): unit) : DirEntry.t array =
     else
       {DirEntry.name = filename; path; stat = link_stat; symlink = None}
   in
-  Stdlib.Array.map make_dir_entry files
+  Stdcompat.Array.map make_dir_entry files

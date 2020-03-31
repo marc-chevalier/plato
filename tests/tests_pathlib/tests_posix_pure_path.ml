@@ -26,7 +26,7 @@ let make_test (type a) (name: string)
 let make_test_string (name: string) (test_cases: (string * string) list)
     (f: Plato.Pathlib.PosixPurePath.t -> string)
   : test =
-  make_test name test_cases (fun a b -> String.compare a b = 0) Fun.id f
+  make_test name test_cases (fun a b -> String.compare a b = 0) Stdcompat.Fun.id f
 
 
 let make_test_list (type a) (name: string) (test_cases: (string * a list) list)
@@ -47,7 +47,7 @@ let make_test_list (type a) (name: string) (test_cases: (string * a list) list)
 let make_test_string_list (name: string) (test_cases: (string * string list) list)
     (f: Plato.Pathlib.PosixPurePath.t -> string list)
   : test =
-  make_test_list name test_cases (fun a b -> String.compare a b = 0) Fun.id f
+  make_test_list name test_cases (fun a b -> String.compare a b = 0) Stdcompat.Fun.id f
 
 
 let test_of_string : test =

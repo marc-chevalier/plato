@@ -69,8 +69,8 @@ let () =
   Printexc.register_printer
     (function
       | ParsingError (source, lines) ->
-        let lines = Stdlib.List.map (fun (lineno, line) -> Format.asprintf "\n\t[line %2d]: %s" lineno line) lines in
-        let lines = Stdlib.String.concat "" lines in
+        let lines = Stdcompat.List.map (fun (lineno, line) -> Format.asprintf "\n\t[line %2d]: %s" lineno line) lines in
+        let lines = Stdcompat.String.concat "" lines in
         Some (Format.asprintf "Source contains parsing errors:  %s%s" source lines)
       | _ -> None
     )
@@ -107,8 +107,8 @@ module DefaultMap : STRING_MUTABLE_MAPPING =
     include Collections.Abc.PolymorphicMutableMappingOfHashtbl
         (struct
           type key = string
-          let equal = Stdlib.String.equal
-          let hash = Stdlib.Hashtbl.hash
+          let equal = Stdcompat.String.equal
+          let hash = Stdcompat.Hashtbl.hash
         end)
     let make (type value) (():  unit) : value t =
       H.create 0
@@ -184,7 +184,7 @@ module BasicInterpolation(Map: STRING_MUTABLE_MAPPING)
               | None -> raise (InterpolationMissingOptionError (option, section, rawval, var))
               | exception Exn.KeyError _ -> raise (InterpolationMissingOptionError(option, section, rawval, var))
             in
-            if Stdlib.String.contains v '%' then
+            if Stdcompat.String.contains v '%' then
               interpolate_some optionxform get items option accum v section map (depth + 1)
             else
               accum := v :: !accum
@@ -196,12 +196,12 @@ module BasicInterpolation(Map: STRING_MUTABLE_MAPPING)
     let before_get (optionxform: optionxform) (get: get) (items: items) (section: string) (option: string) (value: string) (defaults: string option Map.t) : string =
       let l : string list ref = ref [] in
       let () = interpolate_some optionxform get items option l value section defaults 1 in
-      !l |> Stdlib.List.rev |> Stdlib.String.concat ""
+      !l |> Stdcompat.List.rev |> Stdcompat.String.concat ""
 
     let before_set (_optionxform: optionxform) (_get: get) (_items: items) (_section: string) (_option: string) (value: string) : string =
       let tmp_value = Str.replace "%%" "" value in
       let tmp_value = NoPlato.Str.global_replace keycre "" tmp_value in
-      if Stdlib.String.contains tmp_value '%' then
+      if Stdcompat.String.contains tmp_value '%' then
         raise (Exn.ValueError(Format.asprintf "invalid interpolation syntax in %s at position %d" value (Str.find "%" tmp_value)));
       value
     let before_read (_optionxform: optionxform) (_get: get) (_items: items) (_section: string) (_option: string) (value: string) : string =
@@ -263,7 +263,7 @@ module ExtendedInterpolation(Map: STRING_MUTABLE_MAPPING)
                   begin
                     match Map.getitem opt map with
                     | Some v -> v
-                    | None -> raise (InterpolationMissingOptionError (option, section, rawval, Stdlib.String.concat ":" path))
+                    | None -> raise (InterpolationMissingOptionError (option, section, rawval, Stdcompat.String.concat ":" path))
                   end
                 | 2 -> let sect = List.get path 0 in
                   let opt = optionxform (List.get path 1) in
@@ -274,9 +274,9 @@ module ExtendedInterpolation(Map: STRING_MUTABLE_MAPPING)
                       "More than one ':' found: " ^ !rest))
               with
               | Exn.KeyError _ | NoSectionError _ | NoOptionError _ ->
-                raise (InterpolationMissingOptionError(option, section, rawval, Stdlib.String.concat ":" path))
+                raise (InterpolationMissingOptionError(option, section, rawval, Stdcompat.String.concat ":" path))
             in
-            if Stdlib.String.contains v '$' then
+            if Stdcompat.String.contains v '$' then
               interpolate_some optionxform get items opt accum v sect
                 (items ~raw:true sect)
                 (depth + 1)
@@ -289,12 +289,12 @@ module ExtendedInterpolation(Map: STRING_MUTABLE_MAPPING)
     let before_get (optionxform: optionxform) (get: get) (items: items) (section: string) (option: string) (value: string) (defaults: string option Map.t) : string =
       let l : string list ref = ref [] in
       let () = interpolate_some optionxform get items option l value section defaults 1 in
-      !l |> Stdlib.List.rev |> Stdlib.String.concat ""
+      !l |> Stdcompat.List.rev |> Stdcompat.String.concat ""
 
     let before_set (_optionxform: optionxform) (_get: get) (_items: items) (_section: string) (_option: string) (value: string) : string =
       let tmp_value = Str.replace "$$" "" value in
       let tmp_value = NoPlato.Str.global_replace keycre "" tmp_value in
-      if Stdlib.String.contains tmp_value '$' then
+      if Stdcompat.String.contains tmp_value '$' then
         raise (Exn.ValueError(Format.asprintf "invalid interpolation syntax in %s at position %d" value (Str.find "$" tmp_value)));
       value
 
@@ -406,7 +406,7 @@ module ConfigParser
       seq [
         any |> rep |> non_greedy |> group;
         space |> rep |> greedy;
-        (Stdlib.List.map str delim) |> alt |> group;
+        (Stdcompat.List.map str delim) |> alt |> group;
         space |> rep |> greedy;
         any |> rep |> greedy |> group;
         eos;
@@ -418,7 +418,7 @@ module ConfigParser
         any |> rep |> non_greedy |> group;
         space |> rep |> greedy;
         [
-          (Stdlib.List.map str delim) |> alt |> group;
+          (Stdcompat.List.map str delim) |> alt |> group;
           space |> rep |> greedy;
           any |> rep |> greedy |> group;
         ] |> seq |> opt;
@@ -430,7 +430,7 @@ module ConfigParser
       [space] |> compl |> group |> compile
 
     let read_defaults (self: t) (defaults: string option Map.t) : unit =
-      Stdlib.List.iter
+      Stdcompat.List.iter
         (fun (key, value) ->
            Map.setitem (self.optionxform key) value self.defaults
         )
@@ -441,14 +441,14 @@ module ConfigParser
         ?(inline_comment_prefixes: string list = []) ?(strict: bool = true)
         ?(empty_lines_in_values: bool = true) ?(default_section: string = defaultsect) () : t =
       let boolean_states = StringBoolMap.make () in
-      Stdlib.List.iter
+      Stdcompat.List.iter
         (fun (s, b) ->
            StringBoolMap.setitem s b boolean_states
         )
         ["1", true; "yes", true; "true", true; "on", true;
          "0", false; "no", false; "false", false; "off", false];
       let t: t = {
-        optionxform = (fun (s: string) -> Stdlib.String.lowercase_ascii s);
+        optionxform = (fun (s: string) -> Stdcompat.String.lowercase_ascii s);
         boolean_states;
         sectcre = Re.compile sect_tmpl;
         sections = Map.make ();
@@ -508,9 +508,9 @@ module ConfigParser
       Some exc
 
     let read_(self: t) (fp: (int -> string -> unit) -> unit) (fpname: string) : unit =
-      let module StringSet = Stdlib.Set.Make(Stdlib.String) in
-      let module StringPairSet = Stdlib.Set.Make(struct type t = string * string let compare (a, b) (c, d) = let x = Stdlib.String.compare a c in if x <> 0 then x else Stdlib.String.compare b d end) in
-      let module StringMap = Stdlib.Map.Make(Stdlib.String) in
+      let module StringSet = Stdcompat.Set.Make(Stdcompat.String) in
+      let module StringPairSet = Stdcompat.Set.Make(struct type t = string * string let compare (a, b) (c, d) = let x = Stdcompat.String.compare a c in if x <> 0 then x else Stdcompat.String.compare b d end) in
+      let module StringMap = Stdcompat.Map.Make(Stdcompat.String) in
       let elements_added: StringSet.t ref = ref StringSet.empty in
       let elements_added_pair: StringPairSet.t ref = ref StringPairSet.empty in
       let cursect: string option Map.t option ref = ref None in
@@ -520,7 +520,7 @@ module ConfigParser
       let e: (string * (int * string) list) option ref = ref None in
       let f (lineno: int) (line: string) : unit =
         let comment_start : int ref = ref Sys.max_string_length in
-        let inline_prefixes : int StringMap.t ref = Stdlib.List.fold_left (fun acc p -> StringMap.add p ~-1 acc) StringMap.empty self.inline_comment_prefixes |> ref in
+        let inline_prefixes : int StringMap.t ref = Stdcompat.List.fold_left (fun acc p -> StringMap.add p ~-1 acc) StringMap.empty self.inline_comment_prefixes |> ref in
         while !comment_start = Sys.max_string_length && StringMap.is_empty !inline_prefixes |> not do
           let next_prefixes = StringMap.empty in
           let next_prefixes =
@@ -540,7 +540,7 @@ module ConfigParser
           in
           inline_prefixes := next_prefixes
         done;
-        let () = Stdlib.List.iter (fun prefix -> if line |> Str.strip |> Str.startswith prefix then comment_start := 0) (self.comment_prefixes) in
+        let () = Stdcompat.List.iter (fun prefix -> if line |> Str.strip |> Str.startswith prefix then comment_start := 0) (self.comment_prefixes) in
         let comment_start : int option ref =
           if !comment_start = Sys.max_string_length then
             ref None
@@ -620,7 +620,7 @@ module ConfigParser
       | Some (name, l) -> raise (ParsingError (name, l))
 
     let read (self: t) (filenames: string list) : string list =
-      Stdlib.List.fold_left
+      Stdcompat.List.fold_left
         (fun read_ok filename ->
            let () =
              try
@@ -713,7 +713,7 @@ module ConfigParser
           Some vars_
         | None -> None
       in
-      match get self ~raw ?vars ?fallback:Option.(map some fallback) section option with
+      match get self ~raw ?vars ?fallback:Stdcompat.Option.(map some fallback) section option with
       | None -> raise (NoOptionError (option, section))
       | Some value -> value
 
@@ -721,7 +721,7 @@ module ConfigParser
       let l = items_section ~raw section self in
       let map = Map.make () in
       let () =
-        Stdlib.List.iter
+        Stdcompat.List.iter
           (fun (key, value) -> Map.setitem key value map)
           l
       in
@@ -757,12 +757,12 @@ module ConfigParser
                )
           )
       in
-      Stdlib.List.map (fun option -> (option, value_getter option)) orig_keys
+      Stdcompat.List.map (fun option -> (option, value_getter option)) orig_keys
 
     let get_ (type a) (self: t) ?(raw: bool = false) ?(vars: string option Map.t option)
         (section: string) (conv: string -> a) (option: string)
       : a =
-      Option.get (get self ~raw ?vars section option) |> conv
+      Stdcompat.Option.get (get self ~raw ?vars section option) |> conv
 
     let get_conv (type a) (self: t) ?(raw: bool = false) ?(vars: string option Map.t option) ?(fallback: a option) 
         (section: string) (conv: string -> a) (option: string)
@@ -790,7 +790,7 @@ module ConfigParser
       get_conv self ~raw ?vars ?fallback section bool_of_string option
 
     let set (self: t) (section: string) (option: string) (value: string option) : unit =
-      let value = Option.map (Interpolation.before_set self.optionxform (interpolation_get self) (interpolation_items self) section option) value in
+      let value = Stdcompat.Option.map (Interpolation.before_set self.optionxform (interpolation_get self) (interpolation_items self) section option) value in
       let sectdict =
         if Str.bool section |> not || section = self.default_section then
           self.defaults
@@ -810,8 +810,8 @@ module ConfigParser
       existed
 
     let read_dict (self: t) ?(source: string = "<dict>") (dict: string option Map.t Map.t) : unit =
-      let module StringSet = Stdlib.Set.Make(Stdlib.String) in
-      let module StringPairSet = Stdlib.Set.Make(struct type t = string * string let compare (a, b) (c, d) = let x = Stdlib.String.compare a c in if x <> 0 then x else Stdlib.String.compare b d end) in
+      let module StringSet = Stdcompat.Set.Make(Stdcompat.String) in
+      let module StringPairSet = Stdcompat.Set.Make(struct type t = string * string let compare (a, b) (c, d) = let x = Stdcompat.String.compare a c in if x <> 0 then x else Stdcompat.String.compare b d end) in
       let elements_added : StringSet.t ref = ref StringSet.empty in
       let elements_added_pair : StringPairSet.t ref = ref StringPairSet.empty in
       Map.iter
@@ -907,7 +907,7 @@ module ConfigParser
 
     let write_section (self: t) (fp: out_channel) (section_name: string) (section_items: (string * string option) list) (delimiter: string) : unit =
       Printf.fprintf fp "[%s]" section_name;
-      Stdlib.List.iter
+      Stdcompat.List.iter
         (fun (key, value) ->
            let value =
              match value with
@@ -927,7 +927,7 @@ module ConfigParser
 
     let write (self: t) ?(space_around_delimiters: bool = true) (fp: out_channel) : unit =
       let d =
-        let d = Stdlib.List.nth self.delimiters 0 in 
+        let d = Stdcompat.List.nth self.delimiters 0 in 
         if space_around_delimiters then
           Format.asprintf " %s " d
         else
@@ -954,7 +954,7 @@ module ConfigParser
 
     let set_boolean_states (t: t) (l: (string * bool) list) : unit =
       let map = StringBoolMap.make () in
-      let () = Stdlib.List.iter (fun (k, v) -> StringBoolMap.setitem k v map) l in
+      let () = Stdcompat.List.iter (fun (k, v) -> StringBoolMap.setitem k v map) l in
       t.boolean_states <- map
 
     let get_optionxform ({optionxform; _}: t) : (string -> string) =

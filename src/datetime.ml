@@ -1,8 +1,16 @@
+#if OCAML_VERSION >= (4, 7, 0)
 type nothing = |
 let compare (a: nothing) (b: nothing) : int =
   match a, b with
   | _ -> .
 [@@warning "-32"]
+#else
+type nothing
+let compare (a: nothing) (b: nothing) : int =
+  match a, b with
+  | _ -> assert false
+[@@warning "-32"]
+#endif
 
 module Time_ = Time
 
@@ -13,7 +21,7 @@ let _MAXORDINAL : int = 3652059
 let _DAYS_IN_MONTH : int array = [| -1; 31; 28; 31; 30; 31; 30; 31; 31; 30; 31; 30; 31 |]
 
 let _DAYS_BEFORE_MONTH : int array =
-  let a = Stdlib.Array.make 13 ~-1 in
+  let a = Stdcompat.Array.make 13 ~-1 in
   let dbm = ref 0 in
   for i = 1 to 12 do
     a.(i) <- !dbm;
@@ -244,7 +252,7 @@ module Timedelta =
         args := (Format.asprintf "microseconds=%d"  self.microseconds)::!args;
       if !args = [] then
         args := ["0"];
-      Format.asprintf "%s.%s(%s)" __MODULE__ "datetime" (Stdlib.String.concat "" (Stdlib.List.rev !args))
+      Format.asprintf "%s.%s(%s)" __MODULE__ "datetime" (Stdcompat.String.concat "" (Stdcompat.List.rev !args))
 
     let to_string (self: t) : string =
       let mm, ss = divmod self.seconds 60 in
@@ -333,15 +341,15 @@ module Timedelta =
       q, make ~microseconds:r ()
 
     let compare (self: t) (other: t) : int =
-      let c = Stdlib.Int.compare self.days other.days in
+      let c = Stdcompat.Int.compare self.days other.days in
       if c <> 0 then
         c
       else
-        let c = Stdlib.Int.compare self.seconds other.seconds in
+        let c = Stdcompat.Int.compare self.seconds other.seconds in
         if c <> 0 then
           c
         else
-          Stdlib.Int.compare self.microseconds other.microseconds
+          Stdcompat.Int.compare self.microseconds other.microseconds
 
     let eq (self: t) (other: t) : bool =
       compare self other = 0
@@ -360,7 +368,7 @@ module Timedelta =
 
     let hash (self: t) : int =
       if self.hashcode = ~- 1 then
-        self.hashcode <- Stdlib.Hashtbl.hash (self.days, self.seconds, self.microseconds);
+        self.hashcode <- Stdcompat.Hashtbl.hash (self.days, self.seconds, self.microseconds);
       self.hashcode
 
     let bool (self: t) : bool =
@@ -489,21 +497,21 @@ module Date =
       build_struct_time self.year self.month self.day 0 0 0 ~-1
 
     let replace ?(year: int option) ?(month: int option) ?(day: int option) (self: t) : t =
-      let year = Option.value year ~default:self.year in
-      let month = Option.value month ~default:self.month in
-      let day = Option.value day ~default:self.day in
+      let year = Stdcompat.Option.value year ~default:self.year in
+      let month = Stdcompat.Option.value month ~default:self.month in
+      let day = Stdcompat.Option.value day ~default:self.day in
       make year month day
 
     let compare (self: t) (other: t) : int =
-      let c = Stdlib.Int.compare self.year other.year in
+      let c = Stdcompat.Int.compare self.year other.year in
       if c <> 0 then
         c
       else
-        let c = Stdlib.Int.compare self.month other.month in
+        let c = Stdcompat.Int.compare self.month other.month in
         if c <> 0 then
           c
         else
-          Stdlib.Int.compare self.day other.day
+          Stdcompat.Int.compare self.day other.day
 
     let eq (self: t) (other: t) : bool =
       compare self other = 0
@@ -522,7 +530,7 @@ module Date =
 
     let hash (self: t) : int =
       if self.hashcode = ~-1 then
-        self.hashcode <- Stdlib.Hashtbl.hash (self.year, self.month, self.day);
+        self.hashcode <- Stdcompat.Hashtbl.hash (self.year, self.month, self.day);
       self.hashcode
 
     let add (self: t) (other: Timedelta.t) : t =
@@ -664,29 +672,29 @@ module TimeDatetimeTZ =
               myoff, otoff, myoff = otoff
           in
           if base_compare then
-            let c = Stdlib.Int.compare self.hour other.hour in
+            let c = Stdcompat.Int.compare self.hour other.hour in
             if c <> 0 then c
             else
-              let c = Stdlib.Int.compare self.minute other.minute in
+              let c = Stdcompat.Int.compare self.minute other.minute in
               if c <> 0 then c
               else
-                let c = Stdlib.Int.compare self.second other.second in
+                let c = Stdcompat.Int.compare self.second other.second in
                 if c <> 0 then c
                 else
-                  Stdlib.Int.compare self.microsecond other.microsecond
+                  Stdcompat.Int.compare self.microsecond other.microsecond
           else
             match myoff, otoff with
             | _, None | None, _ -> if allow_mixed then 2 else raise (Exn.TypeError "cannot compare naive and aware times")
             | Some myoff, Some otoff ->
               let myhhmm = self.hour * 60 + self.minute - Timedelta.floordiv_t myoff (Timedelta.make ~minutes:1 ()) in
               let othhmm = other.hour * 60 + other.minute - Timedelta.floordiv_t otoff ((Timedelta.make ~minutes:1 ())) in
-              let c = Stdlib.Int.compare myhhmm othhmm in
+              let c = Stdcompat.Int.compare myhhmm othhmm in
               if c <> 0 then c
               else
-                let c = Stdlib.Int.compare self.second other.second in
+                let c = Stdcompat.Int.compare self.second other.second in
                 if c <> 0 then c
                 else
-                  Stdlib.Int.compare self.microsecond other.microsecond
+                  Stdcompat.Int.compare self.microsecond other.microsecond
 
         let eq (self: t) (other: t) : bool =
           compare self other = 0
@@ -705,12 +713,12 @@ module TimeDatetimeTZ =
 
         let replace ?(hour: int option) ?(minute: int option) ?(second: int option)
             ?(microsecond: int option) ?(tzinfo: bool = true) ?(fold: int option) (self: t) : t =
-          let hour = Option.value ~default:self.hour hour in
-          let minute = Option.value ~default:self.minute minute in
-          let second = Option.value ~default:self.second second in
-          let microsecond = Option.value ~default:self.microsecond microsecond in
+          let hour = Stdcompat.Option.value ~default:self.hour hour in
+          let minute = Stdcompat.Option.value ~default:self.minute minute in
+          let second = Stdcompat.Option.value ~default:self.second second in
+          let microsecond = Stdcompat.Option.value ~default:self.microsecond microsecond in
           let tzinfo = if tzinfo then self.tzinfo else None in
-          let fold = Option.value ~default:self.fold fold in
+          let fold = Stdcompat.Option.value ~default:self.fold fold in
           make ~hour ~minute ~second ~microsecond ?tzinfo ~fold ()
 
         let hash (self: t) : int =
@@ -724,7 +732,7 @@ module TimeDatetimeTZ =
               in
               let tzoff = utcoffset t in
               match tzoff with
-              | None -> self.hashcode <- Stdlib.Hashtbl.hash (self.hour, self.minute, self.second, self.microsecond)
+              | None -> self.hashcode <- Stdcompat.Hashtbl.hash (self.hour, self.minute, self.second, self.microsecond)
               | Some tzoff ->
                 let a = Timedelta.(sub (make ~hours:self.hour ~minutes:self.minute ()) tzoff) in
                 let b = Timedelta.(make ~hours:1 ()) in
@@ -733,9 +741,9 @@ module TimeDatetimeTZ =
                 assert (Timedelta.(modulo m (make ~minutes:1 ()) |> bool));
                 let m = Timedelta.(floordiv_t m (make ~minutes:1 ())) in
                 if 0 <= h && h < 24 then
-                  self.hashcode <- Stdlib.Hashtbl.hash (make ~hour:h ~minute:m ~second:self.second ~microsecond:self.microsecond ())
+                  self.hashcode <- Stdcompat.Hashtbl.hash (make ~hour:h ~minute:m ~second:self.second ~microsecond:self.microsecond ())
                 else 
-                  self.hashcode <- Stdlib.Hashtbl.hash (h, m, self.second, self.microsecond)
+                  self.hashcode <- Stdcompat.Hashtbl.hash (h, m, self.second, self.microsecond)
             end;
           self.hashcode
 
@@ -871,6 +879,7 @@ module TimeDatetimeTZ =
           ?(hour: int option) ?(minute: int option) ?(second: int option)
           ?(microsecond: int option) ?(tzinfo: tzinfo option) ?(fold: int option)
           (self: t) : t =
+        let module Option = Stdcompat.Option in
         let year = Option.value year ~default:self.year in
         let month = Option.value month ~default:self.month in
         let day = Option.value day ~default:self.day in
@@ -911,7 +920,7 @@ module TimeDatetimeTZ =
         | Some return -> return
         | None -> 
           if base_compare then
-            Stdlib.compare
+            Stdcompat.compare
               (self.year, self.month, self.day, self.hour, self.minute, self.second, self.microsecond)
               (other.year, other.month, other.day, other.hour, other.minute, other.second, other.microsecond)
           else
@@ -946,8 +955,8 @@ module TimeDatetimeTZ =
         compare self other > 0
 
       let fromtimestamp_ (t: float) (utc: bool) (tz: tzinfo option) : t =
-        let frac, t = Stdlib.Float.modf t in
-        let us = frac *. 1e6 |> Stdlib.Float.round |> int_of_float in
+        let frac, t = Stdcompat.Float.modf t in
+        let us = frac *. 1e6 |> Stdcompat.Float.round |> int_of_float in
         let t, us =
           if us >= 1_000_000 then
             t +. 1., us - 1_000_000
@@ -1001,7 +1010,7 @@ module TimeDatetimeTZ =
         | Some tz -> tz.fromutc result
 
       let fromtimestamp ?(tz: tzinfo option) (t: float) : t =
-        fromtimestamp_ t (Option.is_some tz) tz
+        fromtimestamp_ t (Stdcompat.Option.is_some tz) tz
 
       let utcfromtimestamp (t: float) : t =
         fromtimestamp_ t true None
@@ -1243,18 +1252,18 @@ module TimeDatetimeTZ =
       let repr (self: t) : string =
         let l = [self.year; self.month; self.day; self.hour; self.minute; self.second; self.microsecond] in
         let l =
-          if Stdlib.List.nth l (List.len l - 1) = 0 then
+          if Stdcompat.List.nth l (List.len l - 1) = 0 then
             List.slice ~stop:~-1 l
           else
             l
         in
         let l =
-          if Stdlib.List.nth l (List.len l - 1) = 0 then
+          if Stdcompat.List.nth l (List.len l - 1) = 0 then
             List.slice ~stop:~-1 l
           else
             l
         in
-        let s = Format.asprintf "%s.%s(%s)" __MODULE__ "datetime" (Stdlib.String.concat ", " (Stdlib.List.map string_of_int l)) in
+        let s = Format.asprintf "%s.%s(%s)" __MODULE__ "datetime" (Stdcompat.String.concat ", " (Stdcompat.List.map string_of_int l)) in
         match self.tzinfo with
         | Some tzinfo ->
           assert (Str.slice ~start:~-1 s = ")");
@@ -1287,11 +1296,11 @@ module TimeDatetimeTZ =
             in
             let tzoff = utcoffset t in
             match tzoff with
-            | None -> self.hashcode <- Stdlib.Hashtbl.hash (self.year, self.month, self.day, self.hour, self.minute, self.second, self.microsecond)
+            | None -> self.hashcode <- Stdcompat.Hashtbl.hash (self.year, self.month, self.day, self.hour, self.minute, self.second, self.microsecond)
             | Some tzoff ->
               let days = ymd2ord self.year self.month self.day in
               let seconds = self.hour * 3600 + self.minute * 60 + self.second in
-              self.hashcode <- Stdlib.Hashtbl.hash (Timedelta.sub (Timedelta.make ~days ~seconds ~microseconds:self.microsecond ()) tzoff)
+              self.hashcode <- Stdcompat.Hashtbl.hash (Timedelta.sub (Timedelta.make ~days ~seconds ~microseconds:self.microsecond ()) tzoff)
           end;
         self.hashcode
 

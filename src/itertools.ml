@@ -98,7 +98,7 @@ let dropwhile (type a) (pred: a -> bool) (it: a Seq.t) : a Seq.t =
   aux it
 
 let filterfalse (type a) (pred: a -> bool) (it: a Seq.t) : a Seq.t =
-  Seq.filter (Fun.negate pred) it
+  Seq.filter (Stdcompat.Fun.negate pred) it
 
 let islice ?(start: int option) ?(stop: int option) ?(step: int = 1)
     (type a) (it: a Seq.t) : a Seq.t =

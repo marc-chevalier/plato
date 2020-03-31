@@ -11,12 +11,12 @@ type struct_passwd = {
 }
 
 let getpwuid (uid: int) : struct_passwd =
-  let i = Stdlib.open_in "/etc/passwd" in
+  let i = Stdcompat.open_in "/etc/passwd" in
   let rec aux () =
-    match Stdlib.input_line i with
-    | exception End_of_file -> Stdlib.close_in i; raise (Exn.KeyError (Format.asprintf "getpwuid(): uid not found: %d" uid))
+    match Stdcompat.input_line i with
+    | exception End_of_file -> Stdcompat.close_in i; raise (Exn.KeyError (Format.asprintf "getpwuid(): uid not found: %d" uid))
     | s ->
-      match Stdlib.String.split_on_char ':' s with
+      match Stdcompat.String.split_on_char ':' s with
       | name :: passwd :: uid_ :: gid ::gcos :: dir :: shell :: [] ->
         if uid = int_of_string uid_ then
           {
@@ -35,12 +35,12 @@ let getpwuid (uid: int) : struct_passwd =
   aux ()
 
 let getpwname (name: string) : struct_passwd =
-  let i = Stdlib.open_in "/etc/passwd" in
+  let i = Stdcompat.open_in "/etc/passwd" in
   let rec aux () =
-    match Stdlib.input_line i with
-    | exception End_of_file -> Stdlib.close_in i; raise (Exn.KeyError (Format.asprintf "getpwname(): name not found: \"%s\"" name))
+    match Stdcompat.input_line i with
+    | exception End_of_file -> Stdcompat.close_in i; raise (Exn.KeyError (Format.asprintf "getpwname(): name not found: \"%s\"" name))
     | s ->
-      match Stdlib.String.split_on_char ':' s with
+      match Stdcompat.String.split_on_char ':' s with
       | name_ :: passwd :: uid :: gid ::gcos :: dir :: shell :: [] ->
         if name = name_ then
           {
@@ -59,12 +59,12 @@ let getpwname (name: string) : struct_passwd =
   aux ()
 
 let getpwall () : struct_passwd list =
-  let i = Stdlib.open_in "/etc/passwd" in
+  let i = Stdcompat.open_in "/etc/passwd" in
   let rec aux acc =
-    match Stdlib.input_line i with
-    | exception End_of_file -> Stdlib.close_in i; acc
+    match Stdcompat.input_line i with
+    | exception End_of_file -> Stdcompat.close_in i; acc
     | s ->
-      match Stdlib.String.split_on_char ':' s with
+      match Stdcompat.String.split_on_char ':' s with
       | name :: passwd :: uid :: gid ::gcos :: dir :: shell :: [] ->
         aux ({
             pw_name = name;
