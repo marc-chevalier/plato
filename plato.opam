@@ -2,8 +2,8 @@ opam-version: "2.0"
 name: "plato"
 version: "1.0.0"
 synopsis: "Python Library Adapted To OCaml"
-maintainer: "Marc Chevalier <marc.chevalier@ens.fr>"
-authors: "Marc Chevalier <marc.chevalier@ens.fr>"
+maintainer: "Marc Chevalier <marc.chevalier@ens.psl.eu>"
+authors: "Marc Chevalier <marc.chevalier@ens.psl.eu>"
 homepage: "https://gitlab.goji.ens.fr/marc/plato"
 bug-reports: "https://gitlab.goji.ens.fr/marc/plato/issues"
 depends: [
@@ -19,3 +19,7 @@ run-test: [
   ["dune" "runtest"]
 ]
 license: "MIT"
+description: """
+Python Library Adapted To Ocaml
+"""
+
