@@ -2,10 +2,10 @@ opam-version: "2.0"
 name: "plato"
 version: "1.1.0"
 synopsis: "Python Library Adapted To OCaml"
-maintainer: "Marc Chevalier <marc.chevalier@ens.psl.eu>"
-authors: "Marc Chevalier <marc.chevalier@ens.psl.eu>"
-homepage: "https://gitlab.goji.ens.fr/marc/plato"
-bug-reports: "https://gitlab.goji.ens.fr/marc/plato/issues"
+maintainer: "Marc Chevalier <github@marc.chevalier.com>"
+authors: "Marc Chevalier <github@marc.chevalier.com>"
+homepage: "https://github.com/marc-chevalier/plato"
+bug-reports: "https://github.com/marc-chevalier/plato/issues"
 depends: [
   "ocaml" {>= "4.06.0"}
   "dune" {>= "2.0.0"}
