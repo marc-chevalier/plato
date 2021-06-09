@@ -1,29 +1,44 @@
-image: ocaml/opam2:ubuntu-20.04
-
 before_script:
   - sudo apt-get update -y && sudo apt-get install m4 -y
 
 ocaml-4.08:
+  image: ocaml/opam:ubuntu-lts-ocaml-4.08
   script:
-    - opam switch 4.08
-    - eval $(opam env)
     - opam install ./plato.opam --deps-only -t
     - dune runtest
     - opam install ./plato.opam
 
 ocaml-4.09:
+  image: ocaml/opam:ubuntu-lts-ocaml-4.09
   script:
-    - opam switch 4.09
-    - eval $(opam env)
     - opam install ./plato.opam --deps-only -t
     - dune runtest
     - opam install ./plato.opam
 
 ocaml-4.10:
+  image: ocaml/opam:ubuntu-lts-ocaml-4.10
   script:
-    - opam switch 4.10
-    - eval $(opam env)
     - opam install ./plato.opam --deps-only -t
     - dune runtest
     - opam install ./plato.opam
 
+ocaml-4.11:
+  image: ocaml/opam:ubuntu-lts-ocaml-4.11
+  script:
+    - opam install ./plato.opam --deps-only -t
+    - dune runtest
+    - opam install ./plato.opam
+
+ocaml-4.12:
+  image: ocaml/opam:ubuntu-lts-ocaml-4.12
+  script:
+    - opam install ./plato.opam --deps-only -t
+    - dune runtest
+    - opam install ./plato.opam
+
+ocaml-4.13:
+  image: ocaml/opam:ubuntu-lts-ocaml-4.13
+  script:
+    - opam install ./plato.opam --deps-only -t
+    - dune runtest
+    - opam install ./plato.opam
