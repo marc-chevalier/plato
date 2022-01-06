@@ -1,6 +1,6 @@
 (library
  (name        plato)
  (public_name plato)
- (libraries re stdcompat noPlato helpers)
+ (libraries re stdcompat noPlato helpers unix)
  (preprocess (action (run %{bin:cppo} -V OCAML:%{ocaml_version} %{input-file})))
 )
