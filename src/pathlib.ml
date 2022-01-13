@@ -886,7 +886,7 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
     let rec mkdir ?(mode: int = 0o777) ?(parents: bool = false) ?(exist_ok: bool = false) (self: t) : unit =
       match A.mkdir (PP.to_string self) mode with
       | () -> ()
-      | exception Unix.(Unix_error(EEXIST, _, _) as e) when not exist_ok || is_dir self -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
+      | exception Unix.(Unix_error(EEXIST, _, _) as e) when not exist_ok || is_dir self |> not -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
       | exception Unix.(Unix_error(EEXIST, _, _)) -> ()
       | exception Unix.(Unix_error(ENOENT, _, _) as e) when not parents || PP.parent self = self ->  Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
       | exception Unix.(Unix_error(ENOENT, _, _)) ->
