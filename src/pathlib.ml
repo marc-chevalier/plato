@@ -929,23 +929,27 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
     let exists (self: t) : bool =
       match stat self with
       | _ -> true
+      | exception Exn.FileNotFoundError _ -> false
       | exception Unix.(Unix_error (code, _, _)) when ignore_error code -> false
 
     let is_file (self: t) : bool =
       match stat self with
       | stat -> Stat.s_ISREG stat
+      | exception Exn.FileNotFoundError _ -> false
       | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
       | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
 
     let is_symlink (self: t) : bool =
       match stat self with
       | stat -> Stat.s_ISLNK stat
+      | exception Exn.FileNotFoundError _ -> false
       | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
       | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
 
     let is_block_device (self: t) : bool =
       match stat self with
       | stat -> Stat.s_ISBLK stat
+      | exception Exn.FileNotFoundError _ -> false
       | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
       | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
 
@@ -958,12 +962,14 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
     let is_fifo (self: t) : bool =
       match stat self with
       | stat -> Stat.s_ISFIFO stat
+      | exception Exn.FileNotFoundError _ -> false
       | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
       | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
 
     let is_socket (self: t) : bool =
       match stat self with
       | stat -> Stat.s_ISSOCK stat
+      | exception Exn.FileNotFoundError _ -> false
       | exception Unix.(Unix_error(code, _, _)) when ignore_error code -> false
       | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
 
