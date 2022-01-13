@@ -16,10 +16,10 @@ let st_of_tm (t: Unix.tm) : struct_time =
     tm_min = t.tm_min;
     tm_hour = t.tm_hour;
     tm_mday = t.tm_mday;
-    tm_mon = t.tm_mon;
-    tm_year = t.tm_year;
-    tm_wday = t.tm_wday;
-    tm_yday = t.tm_yday;
+    tm_mon = t.tm_mon + 1;
+    tm_year = t.tm_year + 1900;
+    tm_wday = (t.tm_wday + 6) mod 7;
+    tm_yday = t.tm_yday + 1;
     tm_isdst = if t.tm_isdst then 1 else 0;
   }
 
