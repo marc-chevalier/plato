@@ -114,7 +114,7 @@ let build_struct_time (y: int) (m: int) (d: int) (hh: int) (mm: int) (ss: int) (
 let format_time ?(timespec: string = "auto") (hh: int) (mm: int) (ss: int) (us: int) : string =
   let timespec, us =
     if timespec = "auto" then
-      begin (if us = 0 then "microseconds" else "seconds"), us end
+      begin (if us = 0 then "seconds" else "microseconds"), us end
     else if timespec = "milliseconds" then
       timespec, us / 1000
     else
