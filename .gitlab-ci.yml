@@ -1,6 +1,20 @@
 before_script:
   - sudo apt-get update -y && sudo apt-get install m4 -y
 
+ocaml-4.06:
+  image: ocaml/opam:ubuntu-lts-ocaml-4.06
+  script:
+    - opam install ./plato.opam --deps-only -t
+    - dune runtest
+    - opam install ./plato.opam
+
+ocaml-4.07:
+  image: ocaml/opam:ubuntu-lts-ocaml-4.07
+  script:
+    - opam install ./plato.opam --deps-only -t
+    - dune runtest
+    - opam install ./plato.opam
+
 ocaml-4.08:
   image: ocaml/opam:ubuntu-lts-ocaml-4.08
   script:
