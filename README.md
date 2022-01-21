@@ -1,5 +1,7 @@
 Python Library Adapted To Ocaml
 
+!! It is known to be untested and quite buggy on some parts. !!
+
 Ok, not -all- Python library, but some very small parts. This is a work in progress, where modules are added when I need them and feel it is worth to add it.
 
 Currently:
