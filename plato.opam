@@ -1,6 +1,6 @@
 opam-version: "2.0"
 name: "plato"
-version: "1.1.1"
+version: "1.1.2"
 synopsis: "Python Library Adapted To OCaml"
 maintainer: "Marc Chevalier <github@marc.chevalier.com>"
 authors: "Marc Chevalier <github@marc.chevalier.com>"
