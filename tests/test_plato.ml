@@ -3,6 +3,7 @@ open OUnit2
 let run_tests () =
   let suite =
     "Ocolor" >::: [
+      Tests_datetime.test;
       Tests_pathlib.test;
     ]
   in

@@ -1,2 +1,2 @@
 (test (name test_plato)
- (libraries str ounit2 plato tests_pathlib))
+ (libraries str ounit2 plato tests_datetime tests_pathlib))

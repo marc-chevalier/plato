@@ -23,4 +23,8 @@ run-test: [
 license: "MIT"
 description: """
 Python Library Adapted To Ocaml
+
+Plato provides some parts of Python standard library I was missing in OCaml.
+That means things relevant in OCaml (typically, not GC related), without a
+existing great OCaml library (like `re` for `re` or `yojson` for `json`).
 """
