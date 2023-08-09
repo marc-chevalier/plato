@@ -383,6 +383,7 @@ module type PURE_PATH =
     val of_strings: string list -> t
     val of_string: string -> t
     val to_string: t -> string
+    val pp: Format.formatter -> t -> unit
     val hash: t -> int
     val eq: t -> t -> bool
     val (=): t -> t -> bool
@@ -678,6 +679,7 @@ module type PATH =
     val of_strings: string list -> t
     val of_string: string -> t
     val to_string: t -> string
+    val pp: Format.formatter -> t -> unit
     val cwd: unit -> t
     val home: unit -> t
     val samefile: t -> t -> bool
