@@ -56,3 +56,24 @@ ocaml-4.13:
     - opam install ./plato.opam --deps-only -t
     - dune runtest
     - opam install ./plato.opam
+
+ocaml-4.14:
+  image: ocaml/opam:ubuntu-lts-ocaml-4.14
+  script:
+    - opam install ./plato.opam --deps-only -t
+    - dune runtest
+    - opam install ./plato.opam
+
+ocaml-5.0:
+  image: ocaml/opam:ubuntu-lts-ocaml-5.0
+  script:
+    - opam install ./plato.opam --deps-only -t
+    - dune runtest
+    - opam install ./plato.opam
+
+ocaml-5.1:
+  image: ocaml/opam:ubuntu-lts-ocaml-5.1
+  script:
+    - opam install ./plato.opam --deps-only -t
+    - dune runtest
+    - opam install ./plato.opam
