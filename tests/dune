@@ -1,2 +1,4 @@
-(test (name test_plato)
- (libraries str ounit2 plato tests_datetime tests_pathlib))
+(test
+ (name test_plato)
+ (deps (source_tree tests_configparser))
+ (libraries str ounit2 plato tests_array tests_configparser tests_datetime tests_list tests_pathlib tests_str tests_string))

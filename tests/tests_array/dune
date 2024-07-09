@@ -1,0 +1,2 @@
+(library (name tests_array)
+ (libraries ocolor ounit2 plato))

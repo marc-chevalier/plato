@@ -191,10 +191,10 @@ module PosixFlavourParam : FLAVOUR_PARAM =
         begin
           match Sys.getenv "HOME" with
           | homedir -> homedir
-          | exception Not_found -> Pwd.((getpwuid (Unix.getuid ())).pw_dir)
+          | exception Not_found -> Unix.((getpwuid (Unix.getuid ())).pw_dir)
         end
       | Some username ->
-        match Pwd.((getpwname username).pw_dir) with
+        match Unix.((getpwnam username).pw_dir) with
         | homedir -> homedir
         | exception Exn.KeyError _ ->
           raise (Exn.RuntimeError (Format.asprintf "Can't determine home directory for %s" username) )
@@ -818,10 +818,10 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
       PP.of_string normed
 
     let owner (self: t) : string =
-      Pwd.((getpwuid (stat self).Unix.st_uid).pw_name)
+      (Unix.getpwuid (stat self).Unix.st_uid).Unix.pw_name
 
     let group (self: t) : string =
-      Grp.((getgrgid(stat self).Unix.st_gid).gr_name)
+      (Unix.getgrgid(stat self).Unix.st_gid).Unix.gr_name
 
     let open_with (type a) (self: t) (flags: Unix.open_flag list) (perm: Unix.file_perm) (f: Unix.file_descr -> a) : a =
       let fd = A.openfile (PP.to_string self) flags perm in

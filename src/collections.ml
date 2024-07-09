@@ -164,6 +164,9 @@ module Abc =
         val len: t -> int
         val out_of_in: key -> in_value -> t -> out_value
         val in_of_out: key -> out_value -> t -> in_value
+
+        val popitem: (t -> key * out_value) option
+        val contains: (key -> t -> bool) option
       end)
     module type MUTABLE_MAPPING =
       (sig
@@ -203,23 +206,33 @@ module Abc =
               setitem k (in_of_out k v self) self
             in
             iter f other
-          let clear (t: t) : unit =
-            let keys = fold (fun k _ l -> k :: l) t [] in
-            Stdcompat.List.iter (fun k -> delitem k t) keys
           let pop (k: key) (t: t) : out_value =
             match getitem k t with
             | value -> delitem k t; value
             | exception Exn.KeyError _ -> raise (Exn.KeyError "")
-          let popitem (t: t) : key * out_value =
-            let exception Stop of key * out_value in
-            match iter (fun k v -> raise (Stop (k, v))) t with
-            | () -> raise (Exn.KeyError "popitem(): mutable mapping is empty")
-            | exception Stop (k, v) -> delitem k t; k, v
-          let contains (k: key) (t: t) : bool =
-            let exception Found in
-            match iter (fun k_ _ -> if k = k_ then raise Found) t with
-            | () -> false
-            | exception Found -> true
+          let popitem : t -> key * out_value =
+            match popitem with
+            | Some popitem -> popitem
+            | None -> fun t ->
+              let exception Stop of key * out_value in
+              match iter (fun k v -> raise (Stop (k, v))) t with
+              | () -> raise (Exn.KeyError "popitem(): mutable mapping is empty")
+              | exception Stop (k, v) -> delitem k t; k, v
+          let clear (t: t) : unit =
+            try 
+              while true do
+                popitem t |> ignore
+              done
+            with Exn.KeyError _ -> ()
+          let contains: key -> t -> bool =
+            match contains with
+            | Some contains -> contains
+            | None ->
+              fun k t ->
+                let exception Found in
+                match iter (fun k_ _ -> if k = k_ then raise Found) t with
+                | () -> false
+                | exception Found -> true
           let ne (a: t) (b: t) : bool =
             let exception Ne in
             let cmp (other: t) (k: key) (v: out_value) : unit =
@@ -285,6 +298,9 @@ module Abc =
                 H.remove t k
               let out_of_in (_: key) (x: in_value) (_t: t) : out_value = x
               let in_of_out (_: key) (x: out_value) (_t: t) : in_value = x
+
+              let popitem = None
+              let contains = Some (fun k h -> H.mem h k)
             end : MIN_MUTABLE_MAPPING with type key = key and type in_value = value and type out_value = value and type t = t)
 
         let fold (type acc) (f: key -> value -> acc -> acc) (t: t) (acc: acc) : acc =

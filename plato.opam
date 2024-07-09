@@ -14,6 +14,7 @@ depends: [
   "stdcompat" {>= "13"}
   "cppo" {>= "1.6.6"}
   "ounit2" {with-test & >= "2.0.8"}
+  "ocolor" {with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
