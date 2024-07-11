@@ -53,6 +53,7 @@ let split ?(sep: string option) s : string list =
 let slice ?(start: int option) ?(stop: int option) ?(step: int = 1) (s: string) : string =
   Helpers.Slice.slice
     ?start ?stop ~step ~sub:(Some Stdcompat.String.sub) ~rev:None
+    (fun s -> Exn.ValueError s)
     Stdcompat.String.length Stdcompat.String.get
     (Helpers.Slice.Set (fun i c b -> Bytes.set b i c)) (fun l -> Bytes.make l ' ') Bytes.to_string s
 

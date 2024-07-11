@@ -20,12 +20,19 @@ let slice (type a) ?(start: int option) ?(stop: int option) ?(step: int = 1) (l:
     in
     match start with
     | None -> l
-    | Some start -> aux start l
+    | Some start when start >= 0 -> aux start l
+    | Some start ->
+      let length = len l in
+      let start = start + length in
+      if start <= 0
+      then l 
+      else aux (start) l
   else
     let open Helpers.Slice in
     slice
       ?start ?stop ~step
       ~sub:None
       ~rev:(Some Stdcompat.List.rev)
+      (fun s -> Exn.ValueError s)
       Stdcompat.List.length Stdcompat.List.nth
       (ConcatLeft (fun c s -> c::s)) (fun _ -> []) (fun x -> x) l
