@@ -50,8 +50,8 @@ exception InterpolationSyntaxError of string * string * string
 let () =
   Printexc.register_printer
     (function
-      | InterpolationSyntaxError (_option, _section, msg) ->
-        Some msg
+      | InterpolationSyntaxError (option, section, msg) ->
+        Some (Format.asprintf "%s (%s, %s)" msg option section)
       | _ -> None
     )
 
@@ -93,16 +93,7 @@ module type STRING_MUTABLE_MAPPING =
     val copy: 'value t -> 'value t
   end)
 
-module type STRING_BOOL_MUTABLE_MAPPING =
-  (sig
-    include Collections.Abc.MUTABLE_MAPPING
-      with type key = string
-       and type in_value = bool
-       and type out_value = bool
-    val make: unit -> t
-  end)
-
-module DefaultMap : STRING_MUTABLE_MAPPING =
+module DefaultStringMutableMap : STRING_MUTABLE_MAPPING =
   (struct
     include Collections.Abc.PolymorphicMutableMappingOfHashtbl
         (struct
@@ -114,6 +105,28 @@ module DefaultMap : STRING_MUTABLE_MAPPING =
       H.create 0
     let copy (type value) (a: value t) : value t =
       H.copy a
+  end)
+
+module type STRING_BOOL_MUTABLE_MAPPING =
+  (sig
+    include Collections.Abc.MUTABLE_MAPPING
+      with type key = string
+       and type in_value = bool
+       and type out_value = bool
+    val make: unit -> t
+  end)
+
+module DefaultStringBoolMutableMap : STRING_BOOL_MUTABLE_MAPPING =
+  (struct
+    include Collections.Abc.MutableMappingOfHashtbl
+        (struct
+          type key = string
+          type value = bool
+          let equal = Stdcompat.String.equal
+          let hash = Stdcompat.Hashtbl.hash
+        end)
+    let make (():  unit) : t =
+      H.create 0
   end)
 
 module type INTERPOLATION =
@@ -135,6 +148,23 @@ module type INTERPOLATION_BUILDER =
     INTERPOLATION with module Map = Map
 
 
+module NoInterpolation(Map: STRING_MUTABLE_MAPPING)
+  : INTERPOLATION
+    with module Map = Map
+  =
+  (struct
+    module Map = Map
+
+    type optionxform = string -> string
+    type get = ?raw: bool -> ?vars:string Map.t -> ?fallback:string -> string -> string -> string
+    type items = ?raw: bool -> string -> string option Map.t
+
+    let before_get (_: optionxform) (_: get) (_: items) (_section: string) (_option: string) (value: string) (_defaults: string option Map.t) = value
+    let before_set (_: optionxform) (_: get) (_: items) (_section: string) (_option: string) (value: string) = value
+    let before_read (_: optionxform) (_: get) (_: items) (_section: string) (_option: string) (value: string) = value
+    let before_write (_: optionxform) (_: get) (_: items) (_section: string) (_option: string) (value: string) = value
+  end)
+
 module BasicInterpolation(Map: STRING_MUTABLE_MAPPING)
   : INTERPOLATION
     with module Map = Map
@@ -155,10 +185,13 @@ module BasicInterpolation(Map: STRING_MUTABLE_MAPPING)
       if depth > !max_interpolation_depth then
         raise (InterpolationDepthError (option, section, rawval));
       let rest = ref rest in
-      while !rest <> "" do
+      let break = ref false in
+      while !rest <> "" && !break |> not do
         let p = Str.find "%" !rest in
         if p < 0 then
-          accum := !rest::!accum
+          let () = accum := !rest::!accum in
+          let () = break := true in
+          ()
         else
           let () =
             if p > 0 then
@@ -231,10 +264,13 @@ module ExtendedInterpolation(Map: STRING_MUTABLE_MAPPING)
       if depth > !max_interpolation_depth then
         raise (InterpolationDepthError (option, section, rawval));
       let rest = ref rest in
-      while !rest <> "" do
+      let break = ref false in
+      while !rest <> "" && not !break do
         let p = Str.find "$" !rest in
         if p < 0 then
-          accum := !rest::!accum
+          let () = accum := !rest::!accum in
+          let () = break := true in
+          ()
         else
           let () =
             if p > 0 then
@@ -254,20 +290,18 @@ module ExtendedInterpolation(Map: STRING_MUTABLE_MAPPING)
             in
             let path : string list = NoPlato.Str.matched_group 1 !rest |> Str.split ~sep:":" in
             let () = rest := Str.slice ~start:(NoPlato.Str.match_end ()) !rest in
-            let sect = section in
-            let opt = option in
-            let v =
+            let v, sect, opt =
               try
-                match List.len path with
-                | 1 -> let opt = optionxform (List.get path 0) in
+                match path with
+                | [opt] -> let opt = optionxform opt in
                   begin
                     match Map.getitem opt map with
-                    | Some v -> v
+                    | Some v -> v, section, opt
                     | None -> raise (InterpolationMissingOptionError (option, section, rawval, Stdcompat.String.concat ":" path))
                   end
-                | 2 -> let sect = List.get path 0 in
-                  let opt = optionxform (List.get path 1) in
-                  get ~raw:true sect opt
+                | [sect; opt] ->
+                  let opt = optionxform opt in
+                  get ~raw:true sect opt, sect, opt
                 | _ ->
                   raise (InterpolationSyntaxError (
                       option, section,
@@ -348,21 +382,34 @@ module type CONFIG_PARSER =
     val read: t -> string list -> string list
     val read_file: t -> ?source:string -> in_channel -> unit
     val read_string: t -> ?source:string -> string -> unit
+    val read_dict: t -> ?source:string -> string option Map.t Map.t -> unit
     val getint: t -> ?raw:bool -> ?vars:string option Map.t -> ?fallback:int -> string -> string -> int
     val getbool: t -> ?raw:bool -> ?vars:string option Map.t -> ?fallback:bool -> string -> string -> bool
     val getfloat: t -> ?raw:bool -> ?vars:string option Map.t -> ?fallback:float -> string -> string -> float
     val popitem_dict: t -> string * string option Map.t
     val has_option: t -> string -> string -> bool
     val write: t -> ?space_around_delimiters:bool -> out_channel -> unit
+    val pp: ?space_around_delimiters:bool -> Format.formatter -> t -> unit
+    val get: t -> ?raw:bool -> ?vars:string option Map.t -> ?fallback: string option -> string -> string -> string option
+    val set: t -> string -> string -> key option -> unit
+    val remove_section: t -> string -> bool
+    val remove_option: t -> string -> string -> bool
+
+    val default_section: t -> string
+    val add_section: t -> string -> unit
+    val has_section: t -> string -> bool
+
+    val items_in_section: ?raw:bool -> ?vars:string Map.t -> t -> string -> (string * string option) list
+    val to_dict: t -> string option Map.t Map.t
   end)
 
 module ConfigParser
     (StringBoolMap: STRING_BOOL_MUTABLE_MAPPING)
     (StringMap: STRING_MUTABLE_MAPPING)
     (I: INTERPOLATION_BUILDER)
-    : CONFIG_PARSER
-       with module Map = StringMap
-       and module Interpolation.Map = StringMap
+  : CONFIG_PARSER
+    with module Map = StringMap
+     and module Interpolation.Map = StringMap
   =
   (struct
     module Map = StringMap
@@ -393,11 +440,11 @@ module ConfigParser
     }
 
     let sect_tmpl : Re.t =
-      (* "\\[\\([^]]+\\)\\]" *)
       let open Re in
       seq [
+        bol;
         char '[';
-        [char ']'] |> compl |> rep1 |> group;
+        any |> rep1 |> group;
         char ']';
       ]
     let opt_tmpl (delim: string list) : Re.t =
@@ -464,6 +511,7 @@ module ConfigParser
         default_section;
       }
       in
+      Map.setitem default_section {name=default_section; parser=t} t.proxies;
       let () =
         match defaults with
         | Some defaults -> read_defaults t defaults
@@ -522,7 +570,6 @@ module ConfigParser
         let comment_start : int ref = ref Sys.max_string_length in
         let inline_prefixes : int StringMap.t ref = Stdcompat.List.fold_left (fun acc p -> StringMap.add p ~-1 acc) StringMap.empty self.inline_comment_prefixes |> ref in
         while !comment_start = Sys.max_string_length && StringMap.is_empty !inline_prefixes |> not do
-          let next_prefixes = StringMap.empty in
           let next_prefixes =
             StringMap.fold
               (fun prefix index next_prefixes ->
@@ -536,11 +583,11 @@ module ConfigParser
                    next_prefixes
               )
               !inline_prefixes
-              next_prefixes
+              StringMap.empty
           in
           inline_prefixes := next_prefixes
         done;
-        let () = Stdcompat.List.iter (fun prefix -> if line |> Str.strip |> Str.startswith prefix then comment_start := 0) (self.comment_prefixes) in
+        let () = Stdcompat.List.iter (fun prefix -> if line |> Str.strip |> Str.startswith prefix then comment_start := 0) self.comment_prefixes in
         let comment_start : int option ref =
           if !comment_start = Sys.max_string_length then
             ref None
@@ -548,7 +595,7 @@ module ConfigParser
             ref (Some !comment_start)
         in
         let value = Str.slice ?stop:!comment_start line |> Str.strip in
-        if Str.bool value then
+        if Str.bool value |> not then
           if self.empty_lines_in_values then
             begin
               match !comment_start, !cursect, !optname with
@@ -600,21 +647,81 @@ module ConfigParser
               let mo = Re.exec_opt self.optcre value in
               match mo with
               | Some mo ->
-                let optname = Re.Group.get mo 1 in
-                if not (Str.bool optname) then
+                let name = Re.Group.get mo 1 in
+                if not (Str.bool name) then
                   e := handle_error !e fpname lineno line;
-                let optname = self.optionxform(Str.rstrip optname) in
+                let optname_ = self.optionxform(Str.rstrip name) in
+                let () = optname := Some optname_ in
                 let sectname_ = match !sectname with Some sectname -> sectname | None -> failwith "absurd" in
-                if self.strict && StringPairSet.mem (sectname_, optname) !elements_added_pair then
-                  raise (DuplicateOptionError (sectname_, optname, Some fpname, Some lineno));
+                if self.strict && StringPairSet.mem (sectname_, optname_) !elements_added_pair then
+                  raise (DuplicateOptionError (optname_, sectname_, Some fpname, Some lineno));
+                let () = elements_added_pair := StringPairSet.add (sectname_, optname_) !elements_added_pair in
                 if Re.Group.test mo 3 then
                   let optval = Re.Group.get mo 3 |> Str.strip in
-                  Map.setitem optname (Some optval) cursect
+                  Map.setitem optname_ (Some optval) cursect
                 else
-                  Map.setitem optname None cursect
+                  Map.setitem optname_ None cursect
               | None -> e := handle_error !e fpname lineno line
       in
       let () = fp f in
+      let () =
+        let to_change = ref [] in
+        let () =
+          Map.iter
+            (fun option_name value ->
+               match value with
+               | None -> ()
+               | Some v ->
+                 let v_s = Str.strip v in
+                 if Stdcompat.String.equal v v_s then
+                   ()
+                 else
+                   to_change := (option_name, v_s)::!to_change
+            )
+            self.defaults
+        in
+        Stdcompat.List.iter
+          (fun (option_name, new_value) ->
+             Map.setitem option_name (Some new_value) self.defaults
+          )
+          !to_change
+      in
+      let () =
+        let to_change = ref [] in
+        let () = Map.iter
+            (fun section_name section ->
+               let to_change_in_section = ref [] in
+               let () =
+                 Map.iter
+                   (fun option_name value ->
+                      match value with
+                      | None -> ()
+                      | Some v ->
+                        let v_s = Str.strip v in
+                        if Stdcompat.String.equal v v_s then
+                          ()
+                        else
+                          to_change_in_section := (option_name, v_s)::!to_change_in_section
+                   )
+                   section
+               in
+               match !to_change_in_section with
+               | [] -> ()
+               | _::_ -> to_change := (section_name, !to_change_in_section)::!to_change
+            )
+            self.sections
+        in
+        Stdcompat.List.iter
+          (fun (section_name, to_change_in_section) ->
+             let section = Map.getitem section_name self.sections in
+             Stdcompat.List.iter
+               (fun (option_name, new_value) ->
+                  Map.setitem option_name (Some new_value) section
+               )
+               to_change_in_section
+          )
+          !to_change
+      in
       match !e with
       | None -> ()
       | Some (name, l) -> raise (ParsingError (name, l))
@@ -622,26 +729,25 @@ module ConfigParser
     let read (self: t) (filenames: string list) : string list =
       Stdcompat.List.fold_left
         (fun read_ok filename ->
-           let () =
-             try
-               let fp = open_in filename in
-               let f (g: int -> string -> unit) : unit =
-                 let rec aux (i : int) =
-                   match input_line fp with
-                   | s -> g i s; aux (i + 1)
-                   | exception End_of_file -> ()
-                 in
-                 aux 1
+           try
+             let fp = open_in filename in
+             let f (g: int -> string -> unit) : unit =
+               let rec aux (i : int) =
+                 match input_line fp with
+                 | s -> g i s; aux (i + 1)
+                 | exception End_of_file -> ()
                in
-               let () = read_ self f filename in
-               close_in fp
-             with
-             | Sys_error _ -> ()
-           in
-           filename :: read_ok
+               aux 1
+             in
+             let () = read_ self f filename in
+             let () = close_in fp in
+             filename :: read_ok
+           with
+           | Sys_error _ -> read_ok
         )
         []
         filenames
+      |> Stdcompat.List.rev
 
     let read_file (self: t) ?(source: string = "<???>") (file: in_channel) : unit =
       let f (g: int -> string -> unit) : unit =
@@ -717,7 +823,7 @@ module ConfigParser
       | None -> raise (NoOptionError (option, section))
       | Some value -> value
 
-    and interpolation_items (self: t) ?(raw: bool = false) section : string option Map.t =
+    and interpolation_items (self: t) ?(raw: bool = false) (section: string) : string option Map.t =
       let l = items_section ~raw section self in
       let map = Map.make () in
       let () =
@@ -784,21 +890,33 @@ module ConfigParser
       : float =
       get_conv self ~raw ?vars ?fallback section float_of_string option
 
+    let boolean_states =
+      ["1", true; "yes", true; "true", true; "on", true;
+       "0", false; "no", false; "false", false; "off", false]
+
+    let convert_to_boolean_ (value: string) : bool =
+      match Stdcompat.List.assoc_opt (Stdcompat.String.lowercase_ascii value) boolean_states with
+      | None -> raise (Failure (Format.asprintf "Not a boolean: %s" value))
+      | Some b -> b
+
     let getbool (self: t) ?(raw: bool = false) ?(vars: string option Map.t option) ?(fallback: bool option) 
         (section: string) (option: string)
       : bool =
-      get_conv self ~raw ?vars ?fallback section bool_of_string option
+      get_conv self ~raw ?vars ?fallback section convert_to_boolean_ option
 
     let set (self: t) (section: string) (option: string) (value: string option) : unit =
-      let value = Stdcompat.Option.map (Interpolation.before_set self.optionxform (interpolation_get self) (interpolation_items self) section option) value in
-      let sectdict =
-        if Str.bool section |> not || section = self.default_section then
-          self.defaults
-        else
-          try Map.getitem section self.sections with
-          | Exn.KeyError _ -> raise (NoSectionError section)
-      in
-      Map.setitem (self.optionxform option) value sectdict
+      match value, self.allow_no_value with
+      | None, false -> raise (Exn.TypeError "option values must be strings")
+      | _ ->
+        let value = Stdcompat.Option.map (Interpolation.before_set self.optionxform (interpolation_get self) (interpolation_items self) section option) value in
+        let sectdict =
+          if Str.bool section |> not || section = self.default_section then
+            self.defaults
+          else
+            try Map.getitem section self.sections with
+            | Exn.KeyError _ -> raise (NoSectionError section)
+        in
+        Map.setitem (self.optionxform option) value sectdict
 
     let remove_section (self: t) (section: string) : bool =
       let existed = Map.contains section self.sections in
@@ -828,7 +946,7 @@ module ConfigParser
              (fun key value ->
                 let key = self.optionxform key in
                 if self.strict && StringPairSet.mem (section, key) !elements_added_pair then
-                  raise (DuplicateOptionError (section, key, Some source, None));
+                  raise (DuplicateOptionError (key, section, Some source, None));
                 elements_added_pair := StringPairSet.add (section, key) !elements_added_pair;
                 set self section key value
              )
@@ -844,10 +962,8 @@ module ConfigParser
     let contains (key: string) (self: t) : bool =
       key = self.default_section || has_section self key
 
-    let better_contains = contains
-
     let setitem (key: string) (value: string option Map.t) (self: t) : unit =
-      if contains key self && Map.getitem key self.sections == value then
+      if contains key self && ((key = self.default_section && self.defaults == value) || (key <> self.default_section && Map.getitem key self.sections == value)) then
         ()
       else if key = self.default_section then
         Map.clear self.defaults
@@ -869,7 +985,23 @@ module ConfigParser
 
     let iter (f: string -> proxy -> unit) (self: t) : unit =
       f self.default_section {name = self.default_section; parser = self};
-      Map.iter f self.proxies
+      Map.iter (fun k _ -> f k {name = k; parser = self}) self.sections
+
+    let popitem (self: t) : key * proxy =
+      (*
+
+        for key in self.sections():
+            value = self[key]
+            del self[key]
+            return key, value
+        raise KeyError
+
+
+        *)
+      let exception Stop of key in
+      match Map.iter (fun k -> raise (Stop k)) self.sections with
+      | () -> raise (Exn.KeyError "ConfigParser is empty.")
+      | exception Stop name -> delitem name self; name, {name; parser=self}
 
     module MM = Collections.Abc.BuildMutableMapping(
       struct
@@ -884,11 +1016,11 @@ module ConfigParser
         let len: t -> int = len
         let in_of_out (_: key) ({name; parser}: out_value) (_: t) : in_value = Map.getitem name parser.sections
         let out_of_in (k: key) (_: in_value) (self: t) : out_value = Map.getitem k self.proxies
+        let popitem = Some popitem
+        let contains = Some contains
       end)
 
     include MM
-
-    let contains = better_contains
 
     let popitem_dict (self: t) : string * string option Map.t =
       let exception Stop of string * string option Map.t in
@@ -905,27 +1037,27 @@ module ConfigParser
         let option = self.optionxform option in
         Map.contains option (Map.getitem section self.sections) || Map.contains option self.defaults
 
-    let write_section (self: t) (fp: out_channel) (section_name: string) (section_items: (string * string option) list) (delimiter: string) : unit =
-      Printf.fprintf fp "[%s]" section_name;
+    let write_section (self: t) (fmt: Format.formatter) (section_name: string) (section_items: (string * string option) list) (delimiter: string) : unit =
+      Format.fprintf fmt "[%s]\n" section_name;
       Stdcompat.List.iter
         (fun (key, value) ->
            let value =
              match value with
-             | Some value -> Interpolation.before_write self.optionxform (interpolation_get self) (interpolation_items self) section_name key value
-             | None -> ""
+             | Some value -> Some(Interpolation.before_write self.optionxform (interpolation_get self) (interpolation_items self) section_name key value)
+             | None -> None
            in
            let value =
-             if value <> "" || self.allow_no_value then
-               Format.asprintf "%s%s" delimiter (Str.replace "\n" "\n\t" value)
-             else
-               ""
+             match value, self.allow_no_value with
+             | None, true -> ""
+             | Some value, _ -> Format.asprintf "%s%s" delimiter (Str.replace "\n" "\n\t" value)
+             | None, false -> Format.asprintf "%s%s" delimiter "None"
            in
-           Printf.fprintf fp "%s%s" key value
+           Format.fprintf fmt "%s%s\n" key value
         )
         section_items;
-      Printf.fprintf fp "\n"
+      Format.fprintf fmt "\n"
 
-    let write (self: t) ?(space_around_delimiters: bool = true) (fp: out_channel) : unit =
+    let pp ?(space_around_delimiters: bool = true) (fmt: Format.formatter) (self: t) : unit =
       let d =
         let d = Stdcompat.List.nth self.delimiters 0 in 
         if space_around_delimiters then
@@ -934,8 +1066,11 @@ module ConfigParser
           d
       in
       if Map.len self.defaults > 0 then
-        write_section self fp self.default_section (Map.items self.defaults) d;
-      Map.iter (fun section_name section -> write_section self fp section_name (Map.items section) d) self.sections
+        write_section self fmt self.default_section (Map.items self.defaults) d;
+      Stdcompat.List.iter (fun (section_name, section) -> write_section self fmt section_name (Map.items section) d) (self.sections |> StringMap.items |> Stdcompat.List.sort (fun (k1, _v1) (k2, _v2) -> Stdcompat.String.compare k1 k2))
+
+    let write (self: t) ?(space_around_delimiters: bool = true) (fp: out_channel) : unit =
+      pp ~space_around_delimiters (Format.formatter_of_out_channel fp) self
 
     let remove_option (self: t) (section: string) (option: string) : bool =
       let sectdict =
@@ -986,11 +1121,17 @@ module ConfigParser
         let delitem (k: string) ({name; parser}: t) : unit =
           remove_option parser name k |> ignore
 
-        let iter (f: string -> string option -> unit) ({name; parser}: t) : unit =
-          Map.getitem name parser.sections |> Map.iter f
+        let options_ ({name; parser}: t) : key list =
+          if Stdcompat.String.equal name parser.default_section |> not then
+            options parser name
+          else
+            StringMap.keys parser.defaults
 
-        let len ({name; parser}: t) : int =
-          Map.getitem name parser.sections |> Map.len
+        let iter (f: string -> string option -> unit) (self: t) : unit =
+          Stdcompat.List.iter (fun key -> f key (getitem key self)) (options_ self)
+
+        let len (self: t) : int =
+          options_ self |> Stdcompat.List.length
 
         include Collections.Abc.BuildMutableMapping(
           struct
@@ -1005,11 +1146,71 @@ module ConfigParser
             let len: t -> int = len
             let in_of_out (_: key) (s: out_value) (_: t) : in_value = s
             let out_of_in (_: key) (s: in_value) (_: t) : out_value = s
+
+            let popitem = None
+            let contains = None
           end)
 
         let name ({name; _}: t) : string = name
         let parser ({parser; _}: t) : parser = parser
       end)
 
+    let default_section ({default_section; _}: t) : string = default_section
+
+    let items_in_section ?(raw: bool = false) ?(vars: string Map.t option) (self: t) (section: string) : (string * string option) list =
+      let d = StringMap.copy self.defaults in
+      let () =
+        try
+          StringMap.update d (StringMap.getitem section self.sections)
+        with Exn.KeyError _ ->
+          if Stdcompat.String.equal section self.default_section |> not then
+            raise (NoSectionError section)
+      in
+      let orig_keys = StringMap.keys d in
+      let () =
+        match vars with
+        | None -> ()
+        | Some vars ->
+          Map.iter
+            (fun key value ->
+               Map.setitem (self.optionxform key) (Some value) d
+            )
+            vars
+      in
+      let value_getter option =
+        if raw then
+          Map.getitem option d
+        else
+          match Map.getitem option d with
+          | Some value ->
+            Interpolation.before_get 
+              self.optionxform (interpolation_get self) (interpolation_items self)
+              section option value d
+            |> Stdcompat.Option.some
+          | None -> None
+      in
+      Stdcompat.List.map (fun option -> option, value_getter option) orig_keys
+
+    let to_dict (self: t) : string option Map.t Map.t =
+      let d = Map.make () in
+      let () =
+        Stdcompat.List.iter
+          (fun (sect_name, sect) ->
+             let s = Map.make () in
+             let () =
+               Stdcompat.List.iter
+                 (fun (option, value) ->
+                    Map.setitem option value s
+                 )
+                 (SectionProxy.items sect)
+             in
+             Map.setitem sect_name s d
+          )
+          (items self)
+      in
+      d
+
   end)
 
+module DefaultParserBasicInterpolation = ConfigParser(DefaultStringBoolMutableMap)(DefaultStringMutableMap)(BasicInterpolation)
+module DefaultParserExtendedInterpolation = ConfigParser(DefaultStringBoolMutableMap)(DefaultStringMutableMap)(ExtendedInterpolation)

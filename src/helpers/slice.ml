@@ -7,7 +7,7 @@ type ('elt, 'list) concat =
 
 let slice (type a b c)
     ?(start: int option) ?(stop: int option) ?(step: int = 1)
-    ?(sub: (a -> int -> int -> a) option) (length: a -> int) (get: a -> int -> b)
+    ~(sub: (a -> int -> int -> a) option) ~(rev: (a -> a) option) (length: a -> int) (get: a -> int -> b)
     (concat: (b, c) concat) (empty: int -> c) (post: c -> a) (s: a) : a =
   let l = length s in
   let start =
@@ -17,8 +17,8 @@ let slice (type a b c)
         l - 1
       else
         0
-    | Some start when start >= 0 -> min start l
-    | Some start -> max 0 (l + start)
+    | Some start when start >= 0 -> if step > 0 then min start l else min start (l - 1)
+    | Some start -> if step > 0 then max 0 (l + start) else max ~-1 (l + start)
   in
   let stop =
     match stop with
@@ -28,11 +28,13 @@ let slice (type a b c)
       else
         ~-1
     | Some stop when stop >= 0 -> min stop l
-    | Some stop -> max 0 (stop + l)
+    | Some stop -> max ~-1 (stop + l)
   in
-  match sub, step with
-  | Some sub, 1 -> sub s start (stop - start)
-  | _, _ ->
+  match sub, rev, step with
+  | Some sub, _, 1 -> sub s start (stop - start)
+  | Some sub, Some rev, -1 -> sub s start (stop - start) |> rev
+  | _, Some rev, -1 when start = 0 && stop = l - 1 -> rev s
+  | _, _, _ ->
     let l : int list ref = ref [] in
     let i : int ref = ref start in
     let len : int ref = ref 0 in

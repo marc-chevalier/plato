@@ -1,4 +1,4 @@
-let whitespace = " \t\n\r\x0b\x0c"
+let whitespace = Str.whitespace
 let ascii_lowercase = "abcdefghijklmnopqrstuvwxyz"
 let ascii_uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 let ascii_letters = ascii_lowercase ^ ascii_uppercase
@@ -13,4 +13,4 @@ let capwords ?(sep: string option) (s: string) : string =
     (match sep with Some sep -> sep | None -> " ")
     (Str.split ?sep s
      |> Stdcompat.List.map Stdcompat.String.lowercase_ascii
-     |> Stdcompat.List.map Stdcompat.StringLabels.capitalize_ascii)
+     |> Stdcompat.List.map Stdcompat.String.capitalize_ascii)

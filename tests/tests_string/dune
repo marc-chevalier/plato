@@ -1,0 +1,2 @@
+(library (name tests_string)
+ (libraries ocolor ounit2 plato))

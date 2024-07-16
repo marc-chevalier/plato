@@ -10,6 +10,6 @@ let slice (type a) ?(start: int option) ?(stop: int option) ?(step: int = 1) (a:
     let open Helpers.Slice in
     slice
       ?start ?stop ~step
-      ~sub:Stdcompat.Array.sub
+      ~sub:(Some Stdcompat.Array.sub) ~rev:None
       Stdcompat.Array.length Stdcompat.Array.get
       (Set (fun pos e a -> Stdcompat.Array.set a pos e)) (fun size -> Stdcompat.Array.make size f) (fun x -> x) a

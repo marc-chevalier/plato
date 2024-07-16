@@ -25,5 +25,7 @@ let slice (type a) ?(start: int option) ?(stop: int option) ?(step: int = 1) (l:
     let open Helpers.Slice in
     slice
       ?start ?stop ~step
+      ~sub:None
+      ~rev:(Some Stdcompat.List.rev)
       Stdcompat.List.length Stdcompat.List.nth
       (ConcatLeft (fun c s -> c::s)) (fun _ -> []) (fun x -> x) l
