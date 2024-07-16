@@ -1,2 +1,2 @@
 (library (name tests_str)
- (libraries ocolor ounit2 plato))
+ (libraries ocolor ounit2 plato yojson))

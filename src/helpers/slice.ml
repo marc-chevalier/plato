@@ -5,35 +5,43 @@ type ('elt, 'list) concat =
   | ConcatRight of ('list -> 'elt -> 'list)
   | Set of (int -> 'elt -> 'list -> unit)
 
-let slice (type a b c)
-    ?(start: int option) ?(stop: int option) ?(step: int = 1)
-    ~(sub: (a -> int -> int -> a) option) ~(rev: (a -> a) option) (length: a -> int) (get: a -> int -> b)
-    (concat: (b, c) concat) (empty: int -> c) (post: c -> a) (s: a) : a =
-  let l = length s in
+
+let clip (start: int option) (stop: int option) (step: int) (length: int) : int * int =
   let start =
     match start with
     | None ->
       if step < 0 then
-        l - 1
+        length - 1
       else
         0
-    | Some start when start >= 0 -> if step > 0 then min start l else min start (l - 1)
-    | Some start -> if step > 0 then max 0 (l + start) else max ~-1 (l + start)
+    | Some start when start >= 0 -> if step > 0 then min start length else min start (length - 1)
+    | Some start -> if step > 0 then max 0 (length + start) else max ~-1 (length + start)
   in
   let stop =
     match stop with
     | None ->
       if step > 0 then
-        l
+        length
       else
         ~-1
-    | Some stop when stop >= 0 -> min stop l
-    | Some stop -> max ~-1 (stop + l)
+    | Some stop when stop >= 0 -> min stop length
+    | Some stop -> max ~-1 (stop + length)
   in
+  start, stop
+
+
+let slice (type a b c)
+    ?(start: int option) ?(stop: int option) ?(step: int = 1)
+    ~(sub: (a -> int -> int -> a) option) ~(rev: (a -> a) option) (value_error: string -> exn) (length: a -> int) (get: a -> int -> b)
+    (concat: (b, c) concat) (empty: int -> c) (post: c -> a) (s: a) : a =
+  if step = 0 then
+    raise (value_error "slice step cannot be zero");
+  let l = length s in
+  let start, stop = clip start stop step l in
   match sub, rev, step with
-  | Some sub, _, 1 -> sub s start (stop - start)
+  | Some sub, _, 1 -> if start >= stop then empty 0 |> post else sub s start (stop - start)
   | Some sub, Some rev, -1 -> sub s start (stop - start) |> rev
-  | _, Some rev, -1 when start = 0 && stop = l - 1 -> rev s
+  | _, Some rev, -1 when start = l && stop = ~-1 -> rev s
   | _, _, _ ->
     let l : int list ref = ref [] in
     let i : int ref = ref start in

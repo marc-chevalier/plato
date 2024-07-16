@@ -1,4 +1,17 @@
 (test
  (name test_plato)
- (deps (source_tree tests_configparser))
- (libraries str ounit2 plato tests_array tests_configparser tests_datetime tests_list tests_pathlib tests_str tests_string))
+ (deps
+  (source_tree tests_configparser)
+  (source_tree tests_str)
+  (source_tree tests_list))
+ (libraries
+  str
+  ounit2
+  plato
+  tests_array
+  tests_configparser
+  tests_datetime
+  tests_list
+  tests_pathlib
+  tests_str
+  tests_string))
