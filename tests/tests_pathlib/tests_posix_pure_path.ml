@@ -4,13 +4,13 @@ open OUnit2
 
 let make_test (type a) (name: string)
     (test_cases: (string * a) list) (eq: a -> a -> bool)
-    (p: a -> string) (f: Plato.Pathlib.PosixPurePath.t -> a)
+    (p: a -> string) (f: Plato.Pathlib.PurePosixPath.t -> a)
   : test =
   let make_tests (path, result: string * a) : test =
-    let case _ =
+    let case (_: test_ctxt) =
       let out =
         path
-        |> Plato.Pathlib.PosixPurePath.of_string
+        |> Plato.Pathlib.PurePosixPath.of_string
         |> f
       in
       assert_equal
@@ -24,14 +24,14 @@ let make_test (type a) (name: string)
 
 
 let make_test_string (name: string) (test_cases: (string * string) list)
-    (f: Plato.Pathlib.PosixPurePath.t -> string)
+    (f: Plato.Pathlib.PurePosixPath.t -> string)
   : test =
   make_test name test_cases (fun a b -> String.compare a b = 0) Stdcompat.Fun.id f
 
 
 let make_test_list (type a) (name: string) (test_cases: (string * a list) list)
     (eq: a -> a -> bool) (p: a -> string)
-    (f: Plato.Pathlib.PosixPurePath.t -> a list)
+    (f: Plato.Pathlib.PurePosixPath.t -> a list)
   : test =
   let eq (a: a list) (b: a list) : bool =
     match List.for_all2 eq a b with
@@ -45,7 +45,7 @@ let make_test_list (type a) (name: string) (test_cases: (string * a list) list)
 
 
 let make_test_string_list (name: string) (test_cases: (string * string list) list)
-    (f: Plato.Pathlib.PosixPurePath.t -> string list)
+    (f: Plato.Pathlib.PurePosixPath.t -> string list)
   : test =
   make_test_list name test_cases (fun a b -> String.compare a b = 0) Stdcompat.Fun.id f
 
@@ -61,7 +61,7 @@ let test_of_string : test =
     "~/a", "~/a";
   ]
   in
-  make_test_string "test_of_string" test_cases Plato.Pathlib.PosixPurePath.to_string
+  make_test_string "test_of_string" test_cases Plato.Pathlib.PurePosixPath.to_string
 
 
 let test_name : test =
@@ -76,7 +76,7 @@ let test_name : test =
     "/a/b.c", "b.c";
   ]
   in
-  make_test_string "test_name" test_cases Plato.Pathlib.PosixPurePath.name
+  make_test_string "test_name" test_cases Plato.Pathlib.PurePosixPath.name
 
 
 let test_suffix : test =
@@ -87,7 +87,7 @@ let test_suffix : test =
     "a.b/c", "";
   ]
   in
-  make_test_string "test_suffix" test_cases Plato.Pathlib.PosixPurePath.suffix
+  make_test_string "test_suffix" test_cases Plato.Pathlib.PurePosixPath.suffix
 
 
 let test_suffixes : test =
@@ -98,7 +98,7 @@ let test_suffixes : test =
     "a.b/c", [];
   ]
   in
-  make_test_string_list "test_suffixes" test_cases Plato.Pathlib.PosixPurePath.suffixes
+  make_test_string_list "test_suffixes" test_cases Plato.Pathlib.PurePosixPath.suffixes
 
 
 let test_stem : test =
@@ -109,11 +109,11 @@ let test_stem : test =
     "a.b/c", "c";
   ]
   in
-  make_test_string "test_stem" test_cases Plato.Pathlib.PosixPurePath.stem
+  make_test_string "test_stem" test_cases Plato.Pathlib.PurePosixPath.stem
 
 
 let test_with_name : test =
-  let module PPP = Plato.Pathlib.PosixPurePath in
+  let module PPP = Plato.Pathlib.PurePosixPath in
   let test_cases : (string * string * string) list = [
     "/Downloads/pathlib.tar.gz", "setup.py", "/Downloads/setup.py";
   ]
@@ -136,7 +136,7 @@ let test_with_name : test =
 
 
 let test_with_name_fail : test =
-  let module PPP = Plato.Pathlib.PosixPurePath in
+  let module PPP = Plato.Pathlib.PurePosixPath in
   let test_cases : (string * string) list = [
     "/", "setup.py";
   ]
@@ -158,7 +158,7 @@ let test_with_name_fail : test =
 
 
 let test_with_suffix : test =
-  let module PPP = Plato.Pathlib.PosixPurePath in
+  let module PPP = Plato.Pathlib.PurePosixPath in
   let test_cases : (string * string * string) list = [
     "/Downloads/pathlib.tar.gz", ".bz2", "/Downloads/pathlib.tar.bz2";
     "README.txt", "", "README";
@@ -183,7 +183,7 @@ let test_with_suffix : test =
 
 
 let test_relative_to : test =
-  let module PPP = Plato.Pathlib.PosixPurePath in
+  let module PPP = Plato.Pathlib.PurePosixPath in
   let test_cases : (string * string * string) list = [
     "/etc/passwd", "/", "etc/passwd";
   ]
@@ -206,7 +206,7 @@ let test_relative_to : test =
 
 
 let test_relative_to_fail : test =
-  let module PPP = Plato.Pathlib.PosixPurePath in
+  let module PPP = Plato.Pathlib.PurePosixPath in
   let test_cases : (string * string) list = [
     "/etc", "/usr";
   ]
@@ -219,7 +219,7 @@ let test_relative_to_fail : test =
           (PPP.of_string b)
       in
       assert_raises
-        (Plato.Exn.ValueError (Format.asprintf "%s does not start with %s" a b))
+        (Plato.Exn.ValueError (Format.asprintf "%s is not in the subpath of %s" a b))
         out
     in
     a ^ "->" ^ b >:: case
@@ -227,7 +227,7 @@ let test_relative_to_fail : test =
   "test_relative_to_fail" >::: List.map make_tests test_cases
 
 
-let test_posix_pure_path : test =
+let test : test =
   "posix_pure_path" >::: [
     test_of_string;
     test_name;

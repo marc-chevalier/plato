@@ -79,6 +79,7 @@ module Abc =
         type key = int
         val len: t -> int
         val getitem: key -> t -> e
+        val equal_e: (e -> e -> bool) option
       end)
     module type SEQUENCE =
       (sig
@@ -88,6 +89,7 @@ module Abc =
         include MIN_SEQUENCE with type e := e and type t := t and type key := key
         include REVERSIBLE with type e := e and type t := t and type key := key
         include COLLECTION with type e := e and type t := t and type key := key and type i := e
+        val equal_e: e -> e -> bool
       end)
     module type SEQUENCE_BUILDER =
       functor (M: MIN_SEQUENCE) ->
@@ -96,6 +98,12 @@ module Abc =
       functor (M: MIN_SEQUENCE) ->
         (struct
           include M
+
+          let equal_e =
+            match equal_e with
+            | None -> Stdcompat.Stdlib.(=)
+            | Some equal_e -> equal_e
+
           let iter (f: key -> e -> unit) (t: t) : unit =
             let l = len t in
             for i = 0 to l - 1 do
@@ -124,7 +132,7 @@ module Abc =
             done
           let contains (e: e) (t: t) : bool =
             let exception Found in
-            match iter (fun _ e_ -> if e = e_ then raise Found) t with 
+            match iter (fun _ e_ -> if equal_e e e_ then raise Found) t with 
             | () -> false
             | exception Found -> true
         end)

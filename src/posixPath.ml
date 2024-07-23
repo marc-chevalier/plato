@@ -60,3 +60,61 @@ let normpath (path: string) : string =
       path
     else
       "."
+
+let splitroot (p: string) : string * string * string =
+  let empty = "" in 
+  if Str.slice ~stop:1 p <> sep_s then
+    empty, empty, p
+  else if Str.slice ~start:1 ~stop:2 p <> sep_s || Str.slice ~start:2 ~stop:3 p = sep_s then
+    empty, sep_s, Str.slice ~start:1 p
+  else
+    empty, Str.slice ~stop:2 p, Str.slice ~start:2 p
+
+let splitdrive (p: string) : string * string =
+  "", p
+
+let normcase (s: string) : string = s
+
+let expanduser (path: string) : string =
+  let exception Return of string in
+  let tilde = "~" in
+  if Stdcompat.String.starts_with ~prefix:tilde path |> not then
+    path
+  else
+    let i = Str.find ~start:1 "/" path in
+    let i =
+      if i < 0 then
+        Stdcompat.String.length path
+      else
+        i
+    in
+    let userhome =
+      if i = 1 then
+        match Sys.getenv_opt "HOME" with
+        | Some userhome -> userhome
+        | None ->
+          try
+            (Unix.getuid () |> Unix.getpwuid).Unix.pw_dir
+          with Not_found -> raise (Return path)
+      else
+        let name = Str.slice ~start:1 ~stop:i path in
+        try
+          let pwent = Unix.getpwnam name in
+          pwent.Unix.pw_dir
+        with Not_found -> raise (Return path)
+    in
+    let userhome = Str.rstrip ~chars:"/" userhome in
+    let userhome = userhome ^ (Str.slice ~start:i path) in
+    if Str.bool userhome then
+      userhome
+    else
+      "/"
+
+let is_reserved (_drive: string) (_root: string) (_tail: string list) : bool =
+  false
+
+let is_absolute (_drive: string) (_root: string) (raw_paths: string list) : bool =
+  Stdcompat.List.exists (Stdcompat.String.starts_with ~prefix:"/") raw_paths
+
+  let has_drv = false
+  let is_supported = Sys.unix

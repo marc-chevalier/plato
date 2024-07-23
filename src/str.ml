@@ -23,16 +23,10 @@ let translate_bound (n: int option) (l: int) (left: bool) : int =
       max 0 (l - n)
 
 let startswith (prefix: string) (s: string) : bool =
-  if Stdcompat.String.length prefix > Stdcompat.String.length s then
-    false
-  else
-    prefix = Stdcompat.String.sub s 0 (Stdcompat.String.length prefix)
+  Stdcompat.String.starts_with ~prefix s
 
 let endswith (suffix: string) (s: string) : bool =
-  if Stdcompat.String.length suffix > Stdcompat.String.length s then
-    false
-  else
-    suffix = Stdcompat.String.sub s (Stdcompat.String.length s - Stdcompat.String.length suffix) (Stdcompat.String.length suffix)
+  Stdcompat.String.ends_with ~suffix s
 
 let split ?(sep: string option) s : string list =
   let r = ref [] in

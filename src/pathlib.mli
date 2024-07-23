@@ -1,15 +1,38 @@
 [@@@warning "@A"]
 
+module type FLAVOUR =
+  (sig
+    module PathMod: Os.PATH
+
+    val sep: char
+    val sep_s: string
+    val altsep: char option
+    val has_drv: bool
+    val is_supported: bool
+    val join: string list -> string
+    val splitroot: string -> string * string * string
+    val splitdrive: string -> string * string
+    val is_reserved: string -> string -> string list -> bool
+    val normcase: string -> string
+    val is_absolute: string -> string -> string list -> bool
+    val expanduser: string -> string
+
+    val altsep_s: string option
+    val is_case_sensitive: bool
+  end)
+
 module type PATH_PARENTS =
   (sig
     type t
     type path
     include Collections.Abc.SEQUENCE with type key := int and type e := path and type t := t
+    val to_seq: t -> path Stdcompat.Seq.t
   end)
 
 module type PURE_PATH =
   (sig
     type t
+    module Flavour: FLAVOUR
     module PathParents: PATH_PARENTS with type path = t
     val repr: t -> string
     val of_paths: t list -> t
@@ -17,6 +40,7 @@ module type PURE_PATH =
     val of_string: string -> t
     val to_string: t -> string
     val pp: Format.formatter -> t -> unit
+    val as_posix: t -> string
     val hash: t -> int
     val eq: t -> t -> bool
     val (=): t -> t -> bool
@@ -29,16 +53,17 @@ module type PURE_PATH =
     val ge: t -> t -> bool
     val (>=): t -> t -> bool
     val compare: t -> t -> int
-    val get_drive: t -> string
-    val get_root: t -> string
+    val drive: t -> string
+    val root: t -> string
     val anchor: t -> string
     val name: t -> string
     val suffix: t -> string
     val suffixes: t -> string list
     val stem: t -> string
     val with_name: t -> string -> t
+    val with_stem: t -> string -> t
     val with_suffix: t -> string -> t
-    val relative_to: t -> t -> t
+    val relative_to: t -> ?walk_up:bool -> t -> t
     val is_relative_to: t -> t -> bool
     val parts: t -> string list
     val joinpath: t -> t -> t
@@ -47,6 +72,9 @@ module type PURE_PATH =
     val is_absolute: t -> bool
     val is_reserved: t -> bool
     val (/): t -> t -> t
+    val (//): t -> string -> t
+    val (/:): string -> t -> t
+    val (//:): string -> string -> t
   end)
 
 module type PATH =
@@ -101,10 +129,13 @@ module type PATH =
   end)
 
 module WindowsPath : PATH
-module WindowsPurePath = WindowsPath.PurePath
+module PureWindowsPath = WindowsPath.PurePath
+module WindowsFlavour = PureWindowsPath.Flavour
 
 module PosixPath : PATH
-module PosixPurePath = PosixPath.PurePath
+module PurePosixPath = PosixPath.PurePath
+module PosixFlavour = PurePosixPath.Flavour
 
 module Path : PATH
 module PurePath = Path.PurePath
+module Flavour = PurePath.Flavour

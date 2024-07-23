@@ -10,221 +10,62 @@ module type FLAVOUR_PARAM =
     val is_supported: bool
     val join: string list -> string
     val splitroot: string -> string * string * string
-    val casefold: string -> string
-    val casefold_parts: string list -> string list
-    val gethomedir: ?username: string -> (string list -> string * string * string list) -> string
-    val is_reserved: string list -> bool
+    val splitdrive: string -> string * string
+    val is_reserved: string -> string -> string list -> bool
+    val normcase: string -> string
+    val is_absolute: string -> string -> string list -> bool
+    val expanduser: string -> string
   end)
 
-module WindowsFlavourParam : FLAVOUR_PARAM =
+module WindowsFlavourParam : FLAVOUR_PARAM with module PathMod = NtPath=
   (struct
     module PathMod = NtPath
+    include NtPath
 
-    let sep = '\\'
-    let sep_s : string = Stdcompat.String.make 1 sep
-    let join : string list -> string = Stdcompat.String.concat sep_s
+    let join : string list -> string =
+      function
+      | [] -> ""
+      | h::t -> NtPath.join h t
 
-    let altsep = Some '/'
+    let is_absolute (drive: string) (root: string) (_raw_paths: string list) : bool =
+      Str.bool drive && Str.bool root
 
-    let has_drv = true
-
-    let is_supported = Sys.win32 || Sys.cygwin
-
-    let drive_letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    let ext_namespace_prefix = "\\\\?\\"
-
-    let reserved_names = ["CON"; "PRN"; "AUX"; "NUL"] @
-                         (Stdcompat.List.init 9 (fun i -> Format.asprintf "COM%d" (i+1))) @
-                         (Stdcompat.List.init 9 (fun i -> Format.asprintf "LPT%d" (i+1)))
-
-    let split_extended_path (s: string) : string * string =
-      let prefix = "" in
-      let prefix, s =
-        if Str.startswith ext_namespace_prefix s then
-          let prefix = Str.slice ~stop:4 s in
-          let s = Str.slice ~start:4 s in
-          if Str.startswith "UNC\\" s then
-            let prefix = prefix ^ Str.slice ~stop:3 s in
-            let s = "\\" ^ Str.slice ~start:3 s in
-            prefix, s
-          else
-            prefix, s
-        else
-          prefix, s
-      in
-      prefix, s
-
-
-    let splitroot (part: string) : string * string * string =
-      let first = Str.slice ~start:0 ~stop:1 part in
-      let second = Str.slice ~start:1 ~stop:2 part in
-      let prefix, part, first, second =
-        if first = sep_s && second = sep_s then
-          let prefix, part = split_extended_path part in
-          prefix, part, first, second
-        else
-          "", part, first, second
-      in
-      let third = Str.slice ~start:2 ~stop:3 part in
-      let prefix, root, part, return =
-        if second = sep_s && first = sep_s && third <> sep_s then
-          let index = Str.find ~start:2 sep_s part in 
-          if index <> -1 then
-            let index2 = Str.find ~start:(index + 1) sep_s part in
-            if index2 <> index + 1 then
-              let index2 =
-                if index2 = -1 then
-                  Str.len part
-                else
-                  index2
-              in
-              if prefix <> "" then
-                prefix ^ Str.slice ~start:1 ~stop:index2 part, sep_s, Str.slice ~start:(index2 + 1) part, true
-              else 
-                Str.slice ~stop:index2 part, sep_s, Str.slice ~start:(index2 + 1) part, true
-            else
-              prefix, "", part, false
-          else
-            prefix, "", part, false
-        else
-          prefix, "", part, false
-      in
-      if return then
-        prefix, root, part
-      else
-        let drv = "" in
-        let drv, part, first =
-          if second = ":" && (Stdcompat.String.contains drive_letters (Str.get first 0)) then
-            Str.slice ~stop:2 part, Str.slice ~start:2 part, third
-          else
-            drv, part, first
-        in
-        let root, part =
-          if first = sep_s then
-            first, Str.lstrip ~chars:sep_s part
-          else
-            root, part
-        in
-        prefix ^ drv, root, part
-
-    let casefold (s: string) : string =
-      Stdcompat.String.lowercase_ascii s
-
-    let casefold_parts (l: string list) : string list =
-      Stdcompat.List.map casefold l
-
-    let is_reserved (parts: string list) : bool =
-      if parts = [] then
-        false
-      else if Str.startswith "\\\\" (Stdcompat.List.hd parts) then
-        false
-      else
-        let head, _sep, _tail = Str.partition "." List.(get parts ~-1) in
-        Stdcompat.List.mem (Stdcompat.String.uppercase_ascii head) reserved_names
-
-    let gethomedir ?(username: string option) (parse_parts: string list -> string * string * string list) : string =
-      let userhome =
-        match Sys.getenv_opt "HOME" with
-        | Some userhome -> userhome
-        | None -> 
-          match Sys.getenv_opt "USERPROFILE" with
-          | Some userhome -> userhome
-          | None -> 
-            match Sys.getenv_opt "HOMEPATH" with
-            | None -> failwith "Can't determine home directory"
-            | Some userhome ->
-              let drv =
-                match Sys.getenv_opt "HOMEDRIVE" with
-                | Some drv -> drv
-                | None -> ""
-              in
-              drv^userhome
-
-      in
-      match username with
-      | None -> userhome
-      | Some username ->
-        let drv, root, parts = parse_parts [userhome] in
-        if Stdcompat.List.(parts |> rev |> hd) <> Sys.getenv "USERNAME" then
-          failwith (Format.asprintf "Can't determine home directory for %s" username);
-        let parts = Stdcompat.List.(parts |> rev |> tl |> cons username |> rev) in
-        if drv <> "" || root <> "" then
-          drv^root^join (match parts with [] -> [] | _::q -> q)
-        else
-          join parts
+    let altsep = Some altsep
 
   end)
 
-module PosixFlavourParam : FLAVOUR_PARAM =
+module PosixFlavourParam : FLAVOUR_PARAM with module PathMod = PosixPath =
   (struct
     module PathMod = PosixPath
+    include PathMod
 
-    let sep = '/'
     let altsep = None
-    let has_drv = false
-    let is_supported = Sys.unix
-    let sep_s : string = Stdcompat.String.make 1 sep
-    let join : string list -> string = Stdcompat.String.concat sep_s
-
-    let splitroot (part: string) : string * string * string =
-      if part <> "" && Str.get part 0 = sep then
-        let stripped_part = Str.lstrip ~chars:sep_s part in
-        if Str.(len part - len stripped_part) = 2 then
-          "", Stdcompat.String.make 2 sep, stripped_part
-        else
-          "", sep_s, stripped_part
-      else
-        "", "", part
-
-    let casefold (s: string) : string =
-      s
-
-    let casefold_parts (l: string list) : string list =
-      l
-
-    let is_reserved (_: string list) : bool =
-      false
-
-    let gethomedir ?(username: string option) (_: string list -> string * string * string list) : string =
-      match username with
-      | None ->
-        begin
-          match Sys.getenv "HOME" with
-          | homedir -> homedir
-          | exception Not_found -> Unix.((getpwuid (Unix.getuid ())).pw_dir)
-        end
-      | Some username ->
-        match Unix.((getpwnam username).pw_dir) with
-        | homedir -> homedir
-        | exception Exn.KeyError _ ->
-          raise (Exn.RuntimeError (Format.asprintf "Can't determine home directory for %s" username) )
+    let join : string list -> string =
+      function
+      | [] -> ""
+      | h::t -> PosixPath.join h t
   end)
 
 module type FLAVOUR =
   (sig
     include FLAVOUR_PARAM
-    val parse_parts: string list -> string * string * string list
-    val join_parsed_parts: string -> string -> string list -> string -> string -> string list -> string * string * string list
-    val gethomedir: ?username: string -> unit -> string
+    val altsep_s: string option
+    val is_case_sensitive: bool
   end)
 
-module Flavour(F: FLAVOUR_PARAM) : FLAVOUR =
+module MakeFlavour(F: FLAVOUR_PARAM) : FLAVOUR with module PathMod = F.PathMod =
   (struct
 
     include F
 
-    let altsep_s : string  option = match F.altsep with None -> None | Some altsep -> Some (Stdcompat.String.make 1 altsep)
+    let altsep_s : string option = Stdcompat.Option.map (Stdcompat.String.make 1) altsep
+
     let replace_altsep (s: string) : string = 
       match altsep_s with
       | None -> s
       | Some altsep_s -> NoPlato.Str.(global_replace (regexp_string altsep_s) (quote sep_s) s)
 
-    let safe_tail (type a) (l: a list) : a list =
-      match l with
-      | [] -> [] 
-      | _ :: t -> t
-
-    let parse_parts (parts: string list) : string * string * string list =
+    let _parse_parts (parts: string list) : string * string * string list =
       let exception Break of string * string * string list in
       let parsed = [] in
       let drv = "" in
@@ -239,6 +80,7 @@ module Flavour(F: FLAVOUR_PARAM) : FLAVOUR =
                else
                  let part = replace_altsep part in
                  let drv, root, rel = F.splitroot part in
+                 Format.printf "@.%s:%s:%s@." drv root rel;
                  let parsed =
                    if Stdcompat.String.contains rel F.sep then
                      Stdcompat.String.split_on_char F.sep rel
@@ -251,19 +93,21 @@ module Flavour(F: FLAVOUR_PARAM) : FLAVOUR =
                  in
                  let () =
                    if drv <> "" || root <> "" then
-                     if drv = "" then
-                       Stdcompat.List.iter
-                         (fun part ->
-                            if part = "" then
-                              ()
-                            else
-                              let part = replace_altsep part in
-                              let drv, _root, _rel = F.splitroot part in
-                              if drv <> "" then
-                                raise (Break (drv, root, parsed))
-                         )
-                         it;
-                   raise (Break (drv, root, parsed))
+                     let () =
+                       if drv = "" then
+                         Stdcompat.List.iter
+                           (fun part ->
+                              if part = "" then
+                                ()
+                              else
+                                let part = replace_altsep part in
+                                let drv, _root, _rel = F.splitroot part in
+                                if drv <> "" then
+                                  raise (Break (drv, root, parsed))
+                           )
+                           it
+                     in
+                     raise (Break (drv, root, parsed))
                  in
                  drv, root, parsed
             )
@@ -280,27 +124,12 @@ module Flavour(F: FLAVOUR_PARAM) : FLAVOUR =
       in
       drv, root, parsed
 
-    let gethomedir ?(username: string option) () = gethomedir ?username parse_parts
-
-    let join_parsed_parts (drv: string) (root: string) (parts: string list)
-        (drv2: string) (root2: string) (parts2: string list) : string * string * string list =
-      if root2 <> "" then
-        if drv2 = "" && drv <> "" then
-          drv, root2, (drv^root2) :: safe_tail parts2
-        else
-          drv2, root2, parts2
-      else if drv2 <> "" then
-        if drv2 = drv || F.casefold drv2 = F.casefold drv then
-          drv, root, parts @ (safe_tail parts2)
-        else
-          drv2, root2, parts2
-      else
-        drv, root, parts @ parts2
+    let is_case_sensitive : bool = F.normcase "Aa" = "Aa"
 
   end)
 
-module WindowsFlavour : FLAVOUR = Flavour(WindowsFlavourParam)
-module PosixFlavour : FLAVOUR = Flavour(PosixFlavourParam)
+module WindowsFlavour_ = MakeFlavour(WindowsFlavourParam)
+module PosixFlavour_ = MakeFlavour(PosixFlavourParam)
 
 module NormalAccessor =
   (struct
@@ -330,23 +159,22 @@ module type PATH_PARENTS =
     type t
     type path
     include Collections.Abc.SEQUENCE with type key := int and type e := path and type t := t
+    val to_seq: t -> path Stdcompat.Seq.t
   end)
 
 module type FULL_PATH_PARENTS =
   (sig
-    type t
-    type path
-    include PATH_PARENTS with type path := path and type t := t
+    include PATH_PARENTS
     val make: (string -> string -> string list -> path) -> string -> string -> string list -> t
   end)
 
-module MakePathParents(P: sig type path end) : FULL_PATH_PARENTS with type path = P.path =
+module MakePathParents(P: sig type path val equal: path -> path -> bool end) : FULL_PATH_PARENTS with type path = P.path =
   (struct
     type path = P.path
     type t = {
       drv: string;
       root: string;
-      parts: string list;
+      tail: string list;
       from_parsed_parts: string -> string -> string list -> path;
     }
     module M :
@@ -358,25 +186,32 @@ module MakePathParents(P: sig type path end) : FULL_PATH_PARENTS with type path 
       (struct
         type key = int
         type e = P.path
+        let equal_e = Some P.equal
         type nonrec t = t
-        let len ({drv; root; parts; _}: t) : int =
-          if drv <> "" || root <> "" then
-            List.len parts - 1
-          else
-            List.len parts
-        let getitem (k: int) ({drv; root; parts; from_parsed_parts} as self: t) : path =
-          if k < 0 || k >= len self then
+        let len ({tail; _}: t) : int =
+          List.len tail
+        let getitem (k: int) ({drv; root; tail; from_parsed_parts} as self: t) : path =
+          if k < - len self || k >= len self then
             raise (Exn.IndexError (string_of_int k));
-          from_parsed_parts drv root (List.slice ~stop:(-k-1) parts)
+          let k = if k < 0 then k + len self else k in
+          from_parsed_parts drv root (List.slice ~stop:(-k-1) tail)
       end)
     include Collections.Abc.BuildSequence(M)
-    let make (from_parsed_parts: string -> string -> string list -> path) (drv: string) (root: string) (parts: string list) : t =
-      {from_parsed_parts; drv; root; parts}
+    let make (from_parsed_parts: string -> string -> string list -> path) (drv: string) (root: string) (tail: string list) : t =
+      {from_parsed_parts; drv; root; tail}
+
+    let to_seq (self: t) : path Stdcompat.Seq.t =
+      reversed_fold
+        (fun _ path acc -> Stdcompat.Seq.cons path acc)
+        self
+        Stdcompat.Seq.empty
+
   end)
 
 module type PURE_PATH =
   (sig
     type t
+    module Flavour: FLAVOUR
     module PathParents: PATH_PARENTS with type path = t
     val repr: t -> string
     val of_paths: t list -> t
@@ -384,6 +219,7 @@ module type PURE_PATH =
     val of_string: string -> t
     val to_string: t -> string
     val pp: Format.formatter -> t -> unit
+    val as_posix: t -> string
     val hash: t -> int
     val eq: t -> t -> bool
     val (=): t -> t -> bool
@@ -396,16 +232,17 @@ module type PURE_PATH =
     val ge: t -> t -> bool
     val (>=): t -> t -> bool
     val compare: t -> t -> int
-    val get_drive: t -> string
-    val get_root: t -> string
+    val drive: t -> string
+    val root: t -> string
     val anchor: t -> string
     val name: t -> string
     val suffix: t -> string
     val suffixes: t -> string list
     val stem: t -> string
     val with_name: t -> string -> t
+    val with_stem: t -> string -> t
     val with_suffix: t -> string -> t
-    val relative_to: t -> t -> t
+    val relative_to: t -> ?walk_up:bool -> t -> t
     val is_relative_to: t -> t -> bool
     val parts: t -> string list
     val joinpath: t -> t -> t
@@ -414,69 +251,185 @@ module type PURE_PATH =
     val is_absolute: t -> bool
     val is_reserved: t -> bool
     val (/): t -> t -> t
+    val (//): t -> string -> t
+    val (/:): string -> t -> t
+    val (//:): string -> string -> t
   end)
 
 module type FULL_PURE_PATH =
   (sig
-    module Flavour : FLAVOUR
-    type t = private {
-      drv: string;
-      root: string;
-      parts: string list;
+    type t = {
+      raw_paths: string list;
+      mutable drv: string option;
+      mutable root: string option;
+      mutable tail_cached: string list option;
       mutable hash: int option;
       mutable str: string option;
-      mutable cached_cparts: string list option;
+      mutable lines_cached: string list option;
+      mutable parts_normcase_cached: string list option;
+      mutable str_normcase_cached: string option;
     }
-    val make_t: string -> string -> string list -> t
+    val make_t: string list -> t
+    val tail: t -> string list
+    val from_parsed_parts: string -> string -> string list -> t
+    val parse_path: string -> string * string * string list
     include PURE_PATH with type t := t
   end)
 
-module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
+module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH with module Flavour = F =
   (struct
     type t = {
-      drv: string;
-      root: string;
-      parts: string list;
+      raw_paths: string list;
+      mutable drv: string option;
+      mutable root: string option;
+      mutable tail_cached: string list option;
       mutable hash: int option;
       mutable str: string option;
-      mutable cached_cparts: string list option;
+      mutable lines_cached: string list option;
+      mutable parts_normcase_cached: string list option;
+      mutable str_normcase_cached: string option;
     }
+
+    let repr ({
+        raw_paths: string list;
+        drv: string option;
+        root: string option;
+        tail_cached: string list option;
+        hash: int option;
+        str: string option;
+        lines_cached: string list option;
+        parts_normcase_cached: string list option;
+        str_normcase_cached: string option;
+      }: t) : string =
+      Format.asprintf
+        "{raw_paths=[%S]; drv=%S; root=%S; tail_cached=%S; hash=%S; str=%s; lines_cached=%S; parts_normcase_cached=%S; str_normcase_cached=%S}"
+        (Stdcompat.String.concat "; " raw_paths)
+        (Stdcompat.Option.value ~default:"_" drv)
+        (Stdcompat.Option.value ~default:"_" root)
+        (tail_cached |> Stdcompat.Option.map (fun l -> "[" ^ Stdcompat.String.concat "; " l ^ "]") |> Stdcompat.Option.value ~default:"_")
+        (hash |> Stdcompat.Option.map (string_of_int) |> Stdcompat.Option.value ~default:"_")
+        (Stdcompat.Option.value ~default:"_" str)
+        (lines_cached |> Stdcompat.Option.map (fun l -> "[" ^ Stdcompat.String.concat "; " l ^ "]") |> Stdcompat.Option.value ~default:"_")
+        (parts_normcase_cached |> Stdcompat.Option.map (fun l -> "[" ^ Stdcompat.String.concat "; " l ^ "]") |> Stdcompat.Option.value ~default:"_")
+        (Stdcompat.Option.value ~default:"_" str_normcase_cached)
 
     module Flavour = F
 
-    module PathParents = MakePathParents(struct type path = t end)
-
-    let repr (self: t) : string =
-      Format.asprintf "{drv: %s; root: %s; parts: [%s]}"
-        self.drv self.root (Stdcompat.String.concat ";" self.parts)
-
-    let make_t (drv: string) (root: string) (parts: string list) : t =
-      {drv; root; parts; hash = None; str = None; cached_cparts = None}
+    let make_t (raw_paths: string list) : t =
+      {
+        raw_paths: string list;
+        drv: string option = None;
+        root: string option = None;
+        tail_cached: string list option = None;
+        hash: int option = None;
+        str: string option = None;
+        lines_cached: string list option = None;
+        parts_normcase_cached: string list option = None;
+        str_normcase_cached: string option = None;
+      }
 
     let of_paths (l: t list) : t =
-      let l = Stdcompat.List.fold_left (fun acc p -> acc @ p.parts) [] l in
-      let drv, root, parts = F.parse_parts l in
-      make_t drv root parts
+      l
+      |> Stdcompat.List.concat_map (fun {raw_paths; _} -> raw_paths)
+      |> make_t
 
     let of_strings (l: string list) : t =
-      let drv, root, parts = F.parse_parts l in
-      make_t drv root parts
+      make_t l
 
     let of_string (s: string) : t =
       of_strings [s]
 
-    let format_parsed_parts (drv: string) (root: string) (parts: string list) : string =
-      if drv <> "" || root <> "" then
-        drv ^ root ^ F.join (List.slice ~start:1 parts)
+    let parse_path (path: string) : string * string * string list =
+      if Str.bool path |> not then
+        "", "", []
       else
-        F.join parts
+        let path =
+          match Flavour.altsep_s with
+          | None -> path
+          | Some altsep_s -> Str.replace altsep_s Flavour.sep_s path
+        in
+        let drv, root, rel = Flavour.splitroot path in
+        let root =
+          if Str.bool root |> not && Stdcompat.String.starts_with ~prefix:Flavour.sep_s drv && Stdcompat.String.ends_with ~suffix:Flavour.sep_s drv |> not then
+            let drv_parts = Stdcompat.String.split_on_char Flavour.sep drv in
+            if Stdcompat.List.compare_length_with drv_parts 4 = 0 && Stdcompat.List.for_all (fun c -> c <> (Stdcompat.List.nth drv_parts 2)) ["."; "?"] then
+              Flavour.sep_s
+            else if Stdcompat.List.compare_length_with drv_parts 6 = 0 then
+              Flavour.sep_s
+            else
+              root
+          else
+            root
+        in
+        let parsed = Stdcompat.List.filter (fun x -> Str.bool x && x <> "." ) (Stdcompat.String.split_on_char Flavour.sep rel) in
+        drv, root, parsed
+
+    let load_parts (self: t) : string * string * string list =
+      let paths = self.raw_paths in
+      let path =
+        match paths with
+        | [] -> ""
+        | [x] -> x
+        | _::_ -> Flavour.join paths
+      in
+      let drv, root, tail = parse_path path in
+      let () = self.drv <- Some drv in
+      let () = self.root <- Some root in
+      let () = self.tail_cached <- Some tail in
+      drv, root, tail
+
+    let drive ({drv; _} as self: t) : string =
+      match drv with
+      | Some drv -> drv
+      | None ->
+        let drv, _root, _tail_cached = load_parts self in
+        drv
+
+    let root ({root; _} as self: t) : string =
+      match root with
+      | Some root -> root
+      | None ->
+        let _drv, root, _tail_cached = load_parts self in
+        root
+
+    let tail ({tail_cached; _} as self: t) : string list =
+      match tail_cached with
+      | Some tail -> tail
+      | None ->
+        let _drv, _root, tail_cached = load_parts self in
+        tail_cached
+
+    let parts (self: t) : string list =
+      let drv = drive self in
+      let rt = root self in
+      let tl = tail self in
+      if Str.bool drv || Str.bool rt then
+        (drv ^ rt) :: tl
+      else
+        tl
+
+    let format_parsed_parts (drv: string) (root: string) (tail: string list) : string =
+      if Str.bool drv || Str.bool root then
+        drv ^ root ^ Stdcompat.String.concat F.sep_s tail
+      else
+        let tail =
+          match tail with
+          | [] -> tail
+          | h::_ ->
+            let drive, _ = Flavour.splitdrive h in
+            if Str.bool drive then
+              "." :: tail
+            else
+              tail
+        in
+        Stdcompat.String.concat F.sep_s tail
 
     let to_string (t: t) : string =
       match t.str with
       | Some s -> s
-      | None -> let s = format_parsed_parts t.drv t.root t.parts in
+      | None -> let s = format_parsed_parts (drive t) (root t) (tail t) in
         let s =
-          if s <> "" then
+          if Str.bool s then
             s
           else
             "."
@@ -487,65 +440,58 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
     let pp (fmt: Format.formatter) (t: t) : unit =
       Format.fprintf fmt "%s" (to_string t)
 
-    let cparts (t: t) : string list =
-      match t.cached_cparts with
-      | Some c -> c
+    let as_posix (self: t) : string =
+      self |> to_string |> Str.replace F.sep_s "/"
+
+    let str_normcase ({str_normcase_cached; _} as self: t) : string =
+      match str_normcase_cached with
+      | Some str_normcase_cached -> str_normcase_cached
       | None ->
-        let cached_cparts = F.casefold_parts t.parts in
-        let () = t.cached_cparts <- Some cached_cparts in
-        cached_cparts
+        let str_normcase =
+          if Flavour.is_case_sensitive then
+            to_string self
+          else
+            to_string self |> Stdcompat.String.lowercase_ascii
+        in
+        let () = self.str_normcase_cached <- Some str_normcase in
+        str_normcase
 
     let eq (a: t) (b: t) : bool =
-      let ca = cparts a in
-      let cb = cparts b in
-      ca = cb
+      Stdcompat.String.equal (str_normcase a) (str_normcase b)
 
-    let hash (self: t) : int =
-      match self.hash with
+    module PathParents = MakePathParents(struct type path = t let equal = eq end)
+
+    let hash ({hash; _} as self: t) : int =
+      match hash with
       | Some hash -> hash
       | None ->
-        let h = Stdcompat.Hashtbl.hash (self.drv, self.root, self.parts) in
+        let h = Stdcompat.Hashtbl.hash (str_normcase self) in
         let () = self.hash <- Some h in
         h
 
     let lt (a: t) (b: t) : bool =
-      let ca = cparts a in
-      let cb = cparts b in
-      ca < cb
+      Stdcompat.String.compare (str_normcase a) (str_normcase b) < 0
 
     let le (a: t) (b: t) : bool =
-      let ca = cparts a in
-      let cb = cparts b in
-      ca <= cb
+      Stdcompat.String.compare (str_normcase a) (str_normcase b) <= 0
 
     let gt (a: t) (b: t) : bool =
-      let ca = cparts a in
-      let cb = cparts b in
-      ca > cb
+      Stdcompat.String.compare (str_normcase a) (str_normcase b) > 0
 
     let ge (a: t) (b: t) : bool =
-      let ca = cparts a in
-      let cb = cparts b in
-      ca >= cb
+      Stdcompat.String.compare (str_normcase a) (str_normcase b) >= 0
 
     let compare (a: t) (b: t) : int =
-      let ca = cparts a in
-      let cb = cparts b in
-      compare ca cb
+      Stdcompat.String.compare (str_normcase a) (str_normcase b)
 
-    let get_drive ({drv; _}: t) : string = drv
-    let get_root ({root; _}: t) : string = root
 
-    let anchor ({root; drv; _}: t) : string =
-      drv^root
+    let anchor (self: t) : string =
+      drive self ^ root self
 
-    let name ({root; drv; parts; _}: t) : string =
-      match parts, drv, root with
-      | [a], "", "" -> a
-      | [] , _ , _
-      | [_], "", _
-      | [_], _ , "" -> ""
-      | _  , _ , _ -> List.(get parts ~-1)
+    let name (self: t) : string =
+      match tail self with
+      | [] -> ""
+      | _::_ as tail -> List.(get tail ~-1)
 
     let suffix (t: t) : string =
       let name = name t in
@@ -571,16 +517,26 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
       else
         name
 
+    let from_parsed_parts (drive: string) (root: string) (tail: string list) : t =
+      let path_str = format_parsed_parts drive root tail in
+      let path = of_string path_str in
+      let () = path.str <- Some (if Str.bool path_str then path_str else ".") in
+      let () = path.drv <- Some drive in
+      let () = path.root <- Some root in
+      let () = path.tail_cached <- Some tail in
+      path
+
+
     let with_name (self: t) (new_name: string) : t =
-      if name self = "" then
+      if self |> name |> Str.bool |> not then
         raise (Exn.ValueError (Format.asprintf "%a has an empty name" pp self))
+      else if new_name = "" || Stdcompat.String.contains new_name F.sep || Option.fold ~none:false ~some:(Stdcompat.String.contains new_name) F.altsep || new_name = "." then
+        raise (Exn.ValueError (Format.asprintf "Invalid name %s" new_name))
       else
-        let drv, root, parts = F.parse_parts [new_name] in
-        let last = Str.get new_name ~-1 in
-        if new_name = "" || last = F.sep || Some last = F.altsep || drv <> "" || root <> "" || Stdcompat.List.length parts <> 1 then
-          raise (Exn.ValueError (Format.asprintf "Invalid name %s" new_name))
-        else
-          make_t self.drv self.root ((List.slice ~stop:~-1 self.parts) @ [new_name])
+        from_parsed_parts (drive self) (root self) ((List.slice ~stop:~-1 (tail self)) @ [new_name])
+
+    let with_stem (self: t) (stem: string) : t =
+      with_name self (stem ^ suffix self)
 
     let with_suffix (self: t) (new_suffix: string) : t =
       if Stdcompat.String.contains new_suffix F.sep || match F.altsep with None -> false | Some altsep -> Stdcompat.String.contains new_suffix altsep then
@@ -599,62 +555,59 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
             else
               Str.slice ~stop:(~-(Str.len old_suffix)) name ^ new_suffix
           in
-          make_t self.drv self.root ((List.slice ~stop:~-1 self.parts) @ [name])
-
-    let relative_to (self: t) (other: t) : t =
-      let abs_part =
-        if self.root <> "" then
-          self.drv :: self.root :: List.slice ~start:1 self.parts
-        else
-          self.parts
-      in
-      let to_abs_parts =
-        if other.root <> "" then
-          other.drv :: other.root :: List.slice ~start:1 other.parts
-        else
-          other.parts
-      in
-      let n = List.len to_abs_parts in
-      let cf = F.casefold_parts in
-      if n = 0 && (self.root <> "" || self.drv <> "") || n <> 0 && List.slice ~stop:n abs_part |> cf <> cf to_abs_parts then
-        raise (Exn.ValueError (Format.asprintf "%a does not start with %s" pp self (format_parsed_parts other.drv other.root other.parts)));
-      make_t "" (if n = 1 then self.root else "") (List.slice ~start:n abs_part)
-
-    let is_relative_to (self: t) (other: t) : bool =
-      match relative_to self other with
-      | _ -> true
-      | exception Exn.ValueError _ -> false
-
-    let parts ({parts; _}: t) : string list =
-      parts
-
-    let make_child (self: t) (args: t) : t =
-      let drv, root, parts = F.join_parsed_parts
-          self.drv self.root self.parts args.drv args.root args.parts in
-      make_t drv root parts
+          from_parsed_parts (drive self) (root self) ((List.slice ~stop:~-1 (tail self)) @ [name])
 
     let joinpath (self: t) (other: t) : t =
-      make_child self other
+      of_strings (self.raw_paths @ other.raw_paths)
 
-    let parent ({drv; root; parts; _} as self: t) : t =
-      if Stdcompat.List.compare_length_with parts 1 = 0 && (drv <> "" || root <> "") then
-        self
-      else
-        make_t drv root (List.slice ~stop:~-1 parts)
+    let parent (self: t) : t =
+      match tail self with
+      | [] -> self
+      | _::_ as tail ->
+        let drv = drive self in
+        let root = root self in
+        from_parsed_parts drv root (List.slice ~stop:~-1 tail)
 
-    let parents ({drv; root; parts; _}: t) : PathParents.t =
-      PathParents.make make_t drv root parts
+    let parents (self: t) : PathParents.t =
+      PathParents.make from_parsed_parts (drive self) (root self) (tail self)
 
-    let is_absolute ({drv; root; _}: t) : bool =
-      if root = "" then
-        false
-      else
-        not F.has_drv || drv <> ""
+    let is_relative_to (self: t) (other: t) : bool =
+      eq self other || PathParents.contains other (parents self)
 
-    let is_reserved ({parts; _}: t) : bool =
-      F.is_reserved parts
+    let relative_to (self: t) ?(walk_up: bool = false) (other: t) : t =
+      let exception Found of int * t in
+      let parents = other |> parents |> PathParents.to_seq |> Stdcompat.List.of_seq in
+      let parents = other::parents in
+      let step, path =
+        try
+          let () =
+            Stdcompat.List.iteri
+              (fun step path ->
+                 if is_relative_to self path then
+                   raise (Found (step, path))
+                 else if not walk_up then
+                   raise (Exn.ValueError (Format.asprintf "%a is not in the subpath of %a" pp self pp other))
+                 else if name path = ".." then
+                   raise (Exn.ValueError (Format.asprintf "'..' segment in %a cannot be walked" pp other))
+              )
+              parents
+          in
+          raise (Exn.ValueError (Format.asprintf "%a and %a have different anchors" pp self pp other))
+        with Found (step, path) -> (step, path)
+      in
+      let parts = Stdcompat.List.init step (fun _ -> "..") @ List.slice ~start:(tail path |> Stdcompat.List.length) (tail self) in
+      of_strings parts
 
-    let (/) = make_child
+    let is_absolute (self: t) : bool =
+      Flavour.is_absolute (drive self) (root self) (self.raw_paths)
+
+    let is_reserved (self: t) : bool =
+      Flavour.is_reserved (drive self) (root self) (tail self)
+
+    let (/) = joinpath
+    let (//) self arg = joinpath self (of_string arg)
+    let (/:) self arg = joinpath (of_string self) arg
+    let (//:) self arg = joinpath (of_string self) (of_string arg)
     let (=) = eq
     let (<) = lt
     let (<=) = le
@@ -662,8 +615,8 @@ module MakePurePath (F: FLAVOUR) : FULL_PURE_PATH =
     let (>=) = ge
   end)
 
-module WindowsPurePath_ : FULL_PURE_PATH = MakePurePath(WindowsFlavour)
-module PosixPurePath_ : FULL_PURE_PATH = MakePurePath(PosixFlavour)
+module WindowsPurePath_ = MakePurePath(WindowsFlavour_)
+module PosixPurePath_ = MakePurePath(PosixFlavour_)
 
 module type PATH =
   (sig
@@ -716,7 +669,10 @@ module type PATH =
     val expanduser: t -> t
   end)
 
-module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
+module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH
+  with module PurePath = PP
+   and type t = PP.t
+  =
   (struct
 
     module PurePath = PP
@@ -741,28 +697,63 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
     let to_string (a: t) : string =
       PP.to_string a
 
-    let cwd ((): unit) : t =
-      Os.getcwd () |> PP.of_string
-
-    let home ((): unit) : t =
-      PP.Flavour.gethomedir () |> PP.of_string
-
     let stat (self: t) : Os.stat_results =
       self |> PP.to_string |> A.stat
 
     let samefile (self: t) (other: t) : bool =
       Os.Path.same_stat (stat self) (stat other)
 
+    let make_child_relpath (self: t) (name: string) : t =
+      let path_str = to_string self in
+      let tail = tail self in
+      let path_str =
+        if Stdcompat.List.compare_length_with tail 0 <> 0 then
+          path_str^Flavour.sep_s^name
+        else if path_str <> "." then
+          path_str^name
+        else
+          name
+      in
+      let path = of_string path_str in
+      let () = path.str <- Some path_str in
+      let () = path.drv <- Some (drive self) in
+      let () = path.root <- Some (root self) in
+      let () = path.tail_cached <- Some (tail @ [name]) in
+      path
+
     let iterdir (self: t) : t Stdcompat.Array.t =
       let dir = self |> PP.to_string |> A.listdir in
-      Stdcompat.Array.map (fun name -> make_t self.drv self.root (self.parts @ [name])) dir
+      Stdcompat.Array.map (fun name -> make_child_relpath self name) dir
+
+    let abspath (path: string) : string =
+      let p = of_string path in
+      let path =
+        if is_absolute p then
+          path
+        else
+          Flavour.join [Sys.getcwd (); path]
+      in
+      Flavour.PathMod.normpath path
 
     let absolute (self: t) : t =
       if PP.is_absolute self then
         self
       else
-        let drv, root, parts = PP.(Os.getcwd () :: self.parts) |> PP.Flavour.parse_parts in
-        PP.make_t drv root parts
+        let cwd =
+          if self |> drive |> Str.bool then
+            self |> drive |> abspath
+          else
+            Os.getcwd ()
+        in
+        if self |> drive |> Str.bool |> not && self |> root |> Str.bool |> not && Int.equal (Stdcompat.List.compare_length_with (tail self) 0) 0 then
+          let result = of_string cwd in
+          let () = result.str <- Some cwd in
+          result
+        else
+          of_strings ([cwd] @ self.raw_paths)
+
+    let cwd ((): unit) : t =
+      Os.getcwd () |> PP.of_string
 
     let resolve ?(strict: bool = false) (path: t) : string =
       let module StringMap = Stdcompat.Map.Make(Stdcompat.String) in
@@ -976,20 +967,29 @@ module MakePath(A: ACCESSOR)(PP: FULL_PURE_PATH) : PATH with type t = PP.t =
       | exception Unix.(Unix_error _ as e) -> Printexc.(raise_with_backtrace e (get_raw_backtrace ()))
 
     let expanduser (self: t) : t =
-      if Stdcompat.String.equal self.PP.drv "" && Stdcompat.String.equal self.PP.root "" && match self.PP.parts with [] -> false | h::_ -> Stdcompat.String.equal (Str.slice ~stop:1 h) "~" then
-        let username = Str.slice ~start:1 (Stdcompat.List.hd self.PP.parts) in
-        let username = if Stdcompat.String.equal username "" then None else Some username in
-        let homedir = PP.Flavour.gethomedir ?username () in
-        PP.of_strings (homedir::List.slice ~start:1 self.PP.parts)
+      if Stdcompat.String.equal (drive self) "" && Stdcompat.String.equal (root self) "" && match tail self with [] -> false | h::_ -> Stdcompat.String.equal (Str.slice ~stop:1 h) "~" then
+        let homedir = Flavour.expanduser (Stdcompat.List.nth (tail self) 0) in
+        let () =
+          if Stdcompat.String.equal (Str.slice ~stop:1 homedir) "~" then
+            raise (Exn.RuntimeError "Could not determine home directory.")
+        in
+        let drv, root, tail = parse_path homedir in
+        from_parsed_parts drv root (tail @ (List.slice ~start:1 tail))
       else
         self
+
+    let home ((): unit) : t =
+      "~" |> of_string |> expanduser
   end)
 
 module WindowsPath = MakePath(NormalAccessor)(WindowsPurePath_)
-module WindowsPurePath = WindowsPath.PurePath
+module PureWindowsPath = WindowsPath.PurePath
+module WindowsFlavour = PureWindowsPath.Flavour
 module PosixPath = MakePath(NormalAccessor)(PosixPurePath_)
-module PosixPurePath = PosixPath.PurePath
+module PurePosixPath = PosixPath.PurePath
+module PosixFlavour = PurePosixPath.Flavour
 
 let path : (module PATH) = if Sys.unix then (module PosixPath) else (module WindowsPath)
 module Path : PATH = (val path)
 module PurePath = Path.PurePath
+module Flavour = PurePath.Flavour
