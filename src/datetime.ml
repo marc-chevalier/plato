@@ -14,8 +14,8 @@ let compare (a: nothing) (b: nothing) : int =
 
 module Time_ = Time
 
-let _MINYEAR : int = 1
-let _MAXYEAR : int = 9999
+let minyear : int = 1
+let maxyear : int = 9999
 let _MAXORDINAL : int = 3652059
 
 let _DAYS_IN_MONTH : int array = [| -1; 31; 28; 31; 30; 31; 30; 31; 31; 30; 31; 30; 31 |]
@@ -176,8 +176,8 @@ let parse_hh_mm_ss_ff (tstr: string) : int * int * int * int =
   time_comps.(0), time_comps.(1), time_comps.(2), time_comps.(3)
 
 let check_date_fields (year: int) (month: int) (day: int) : unit =
-  if not (_MINYEAR <= year && year <= _MAXYEAR) then
-    raise (Exn.ValueError (Format.asprintf "Year must be in %d..%d" _MINYEAR _MAXYEAR));
+  if not (minyear <= year && year <= maxyear) then
+    raise (Exn.ValueError (Format.asprintf "Year must be in %d..%d" minyear maxyear));
   if not (1 <= month && month <= 12) then
     raise (Exn.ValueError("month must be in 1..12"));
   let dim = days_in_month year month in
@@ -354,6 +354,9 @@ module Timedelta =
     let eq (self: t) (other: t) : bool =
       compare self other = 0
 
+    let ne (self: t) (other: t) : bool =
+      compare self other <> 0
+
     let le (self: t) (other: t) : bool =
       compare self other <= 0
 
@@ -365,6 +368,16 @@ module Timedelta =
 
     let gt (self: t) (other: t) : bool =
       compare self other > 0
+
+    module Cmp =
+      (struct
+        let (=) = eq
+        let (<>) = ne
+        let (<=) = le
+        let (<) = lt
+        let (>=) = ge
+        let (>) = gt
+      end)
 
     let hash (self: t) : int =
       if self.hashcode = ~- 1 then
@@ -446,7 +459,7 @@ module Date =
       make y m d
 
     let fromisocalendar (year: int) (week: int) (day: int) : t =
-      if not (_MINYEAR <= year && year <= _MAXYEAR) then
+      if not (minyear <= year && year <= maxyear) then
         raise (Exn.ValueError (Format.asprintf "Year is out of range: %d" year));
       if not (0 < week && week < 53) then
         begin
@@ -803,516 +816,614 @@ module TimeDatetimeTZ =
 
       end)
 
-    module Datetime = (struct
+    module Datetime =
+      (struct
 
-      type t = datetime
+        type t = datetime
 
-      let make (year: int) (month: int) (day: int)
-          ?(hour: int = 0) ?(minute: int = 0) ?(second: int = 0)
-          ?(microsecond: int = 0) ?(tzinfo: tzinfo option) ?(fold: int = 0) ((): unit) : t =
-        let () = check_date_fields year month day in
-        let () = check_time_fields hour minute second microsecond fold in
-        {
-          year;
-          month;
-          day;
-          hour;
-          minute;
-          second;
-          microsecond;
-          tzinfo;
-          hashcode = ~-1;
-          fold;
-        }
+        let make (year: int) (month: int) (day: int)
+            ?(hour: int = 0) ?(minute: int = 0) ?(second: int = 0)
+            ?(microsecond: int = 0) ?(tzinfo: tzinfo option) ?(fold: int = 0) ((): unit) : t =
+          let () = check_date_fields year month day in
+          let () = check_time_fields hour minute second microsecond fold in
+          {
+            year;
+            month;
+            day;
+            hour;
+            minute;
+            second;
+            microsecond;
+            tzinfo;
+            hashcode = ~-1;
+            fold;
+          }
 
-      let hour ({hour; _}: t) : int =
-        hour
+        let hour ({hour; _}: t) : int =
+          hour
 
-      let minute ({minute; _}: t) : int =
-        minute
+        let minute ({minute; _}: t) : int =
+          minute
 
-      let second ({second; _}: t) : int =
-        second
+        let second ({second; _}: t) : int =
+          second
 
-      let microsecond ({microsecond; _}: t) : int =
-        microsecond
+        let microsecond ({microsecond; _}: t) : int =
+          microsecond
 
-      let tzinfo ({tzinfo; _}: t) : tzinfo option =
-        tzinfo
+        let tzinfo ({tzinfo; _}: t) : tzinfo option =
+          tzinfo
 
-      let fold ({fold; _}: t) : int =
-        fold
+        let fold ({fold; _}: t) : int =
+          fold
 
-      let utcoffset (self: t) : Timedelta.t option =
-        match self.tzinfo with
-        | None -> None
-        | Some tzinfo ->
-          let offset = tzinfo.utcoffset (Some self) in
-          let () = check_utc_offset "utcoffset" (Some offset) in
-          Some offset
+        let utcoffset (self: t) : Timedelta.t option =
+          match self.tzinfo with
+          | None -> None
+          | Some tzinfo ->
+            let offset = tzinfo.utcoffset (Some self) in
+            let () = check_utc_offset "utcoffset" (Some offset) in
+            Some offset
 
 
-      let toordinal (self: t) : int =
-        ymd2ord self.year self.month self.day
+        let toordinal (self: t) : int =
+          ymd2ord self.year self.month self.day
 
-      let sub (self: t) (other: t) : Timedelta.t =
-        let days1 = toordinal self in
-        let days2 = toordinal other in
-        let secs1 = self.second + self.minute*60 + self.hour*3600 in
-        let secs2 = other.second + self.minute*60 + self.hour*3600 in
-        let base = Timedelta.make ~days:(days1-days2) ~seconds:(secs1-secs2) ~microseconds:(self.microsecond -other.microsecond) () in
-        if self.tzinfo == other.tzinfo then
-          base
-        else
-          let myoff = utcoffset self in
-          let otoff = utcoffset other in
-          match myoff, otoff with
-          | None, None -> base
-          | None, _ | _, None -> raise (Exn.TypeError "cannot mix maive and timezone-aware time")
-          | Some myoff, Some otoff ->
-            if Timedelta.eq myoff otoff then
-              base
-            else
-              Timedelta.sub (Timedelta.add base otoff)  myoff
-
-      let replace ?(year: int option) ?(month: int option) ?(day: int option)
-          ?(hour: int option) ?(minute: int option) ?(second: int option)
-          ?(microsecond: int option) ?(tzinfo: tzinfo option) ?(fold: int option)
-          (self: t) : t =
-        let module Option = Stdcompat.Option in
-        let year = Option.value year ~default:self.year in
-        let month = Option.value month ~default:self.month in
-        let day = Option.value day ~default:self.day in
-        let hour = Option.value hour ~default:self.hour in
-        let minute = Option.value minute ~default:self.minute in
-        let second = Option.value second ~default:self.second in
-        let microsecond = Option.value microsecond ~default:self.microsecond in
-        let tzinfo =
-          match tzinfo with
-          | Some tzinfo -> Some tzinfo
-          | None -> self.tzinfo
-        in
-        let fold = Option.value fold ~default:self.fold in
-        make year month day ~hour ~minute ~second ~microsecond ?tzinfo ~fold ()
-
-      let cmp ?(allow_mixed: bool = false) (self: t) (other: t) : int =
-        let mytz = self.tzinfo in
-        let ottz = other.tzinfo in
-        let myoff, otoff, base_compare, return =
-          if mytz == ottz then
-            None, None, true, None
+        let sub (self: t) (other: t) : Timedelta.t =
+          let days1 = toordinal self in
+          let days2 = toordinal other in
+          let secs1 = self.second + self.minute*60 + self.hour*3600 in
+          let secs2 = other.second + self.minute*60 + self.hour*3600 in
+          let base = Timedelta.make ~days:(days1-days2) ~seconds:(secs1-secs2) ~microseconds:(self.microsecond -other.microsecond) () in
+          if self.tzinfo == other.tzinfo then
+            base
           else
             let myoff = utcoffset self in
             let otoff = utcoffset other in
-            if allow_mixed then
-              begin
-                if myoff <> (replace ~fold:(1 - self.fold) self |> utcoffset) then
-                  myoff, otoff, true, Some 2
-                else if otoff <> (replace ~fold:(1 - self.fold) other |> utcoffset) then
-                  myoff, otoff, true, Some 2
-                else
-                  myoff, otoff, (match myoff, otoff with None, None -> false | Some myoff, Some otoff -> Timedelta.eq myoff otoff | Some _, None | None, Some _ -> false), None
-              end
-            else
-              myoff, otoff, (match myoff, otoff with None, None -> false | Some myoff, Some otoff -> Timedelta.eq myoff otoff | Some _, None | None, Some _ -> false), None
-        in
-        match return with
-        | Some return -> return
-        | None -> 
-          if base_compare then
-            Stdcompat.compare
-              (self.year, self.month, self.day, self.hour, self.minute, self.second, self.microsecond)
-              (other.year, other.month, other.day, other.hour, other.minute, other.second, other.microsecond)
-          else
             match myoff, otoff with
-            | None, _ | _, None -> if allow_mixed then 2 else raise (Exn.TypeError "cannot compare naive and aware datetimes")
-            | Some _, Some _ ->
-              let diff = sub self other in
-              if diff.days < 0 then
-                ~- 1
+            | None, None -> base
+            | None, _ | _, None -> raise (Exn.TypeError "cannot mix maive and timezone-aware time")
+            | Some myoff, Some otoff ->
+              if Timedelta.eq myoff otoff then
+                base
               else
-              if Timedelta.bool diff then
-                1
+                Timedelta.sub (Timedelta.add base otoff)  myoff
+
+        let replace ?(year: int option) ?(month: int option) ?(day: int option)
+            ?(hour: int option) ?(minute: int option) ?(second: int option)
+            ?(microsecond: int option) ?(tzinfo: tzinfo option) ?(fold: int option)
+            (self: t) : t =
+          let module Option = Stdcompat.Option in
+          let year = Option.value year ~default:self.year in
+          let month = Option.value month ~default:self.month in
+          let day = Option.value day ~default:self.day in
+          let hour = Option.value hour ~default:self.hour in
+          let minute = Option.value minute ~default:self.minute in
+          let second = Option.value second ~default:self.second in
+          let microsecond = Option.value microsecond ~default:self.microsecond in
+          let tzinfo =
+            match tzinfo with
+            | Some tzinfo -> Some tzinfo
+            | None -> self.tzinfo
+          in
+          let fold = Option.value fold ~default:self.fold in
+          make year month day ~hour ~minute ~second ~microsecond ?tzinfo ~fold ()
+
+        let cmp ?(allow_mixed: bool = false) (self: t) (other: t) : int =
+          let mytz = self.tzinfo in
+          let ottz = other.tzinfo in
+          let myoff, otoff, base_compare, return =
+            if mytz == ottz then
+              None, None, true, None
+            else
+              let myoff = utcoffset self in
+              let otoff = utcoffset other in
+              if allow_mixed then
+                begin
+                  if myoff <> (replace ~fold:(1 - self.fold) self |> utcoffset) then
+                    myoff, otoff, true, Some 2
+                  else if otoff <> (replace ~fold:(1 - self.fold) other |> utcoffset) then
+                    myoff, otoff, true, Some 2
+                  else
+                    myoff, otoff, (match myoff, otoff with None, None -> false | Some myoff, Some otoff -> Timedelta.eq myoff otoff | Some _, None | None, Some _ -> false), None
+                end
               else
-                0
+                myoff, otoff, (match myoff, otoff with None, None -> false | Some myoff, Some otoff -> Timedelta.eq myoff otoff | Some _, None | None, Some _ -> false), None
+          in
+          match return with
+          | Some return -> return
+          | None -> 
+            if base_compare then
+              Stdcompat.compare
+                (self.year, self.month, self.day, self.hour, self.minute, self.second, self.microsecond)
+                (other.year, other.month, other.day, other.hour, other.minute, other.second, other.microsecond)
+            else
+              match myoff, otoff with
+              | None, _ | _, None -> if allow_mixed then 2 else raise (Exn.TypeError "cannot compare naive and aware datetimes")
+              | Some _, Some _ ->
+                let diff = sub self other in
+                if diff.days < 0 then
+                  ~- 1
+                else
+                if Timedelta.bool diff then
+                  1
+                else
+                  0
 
-      let compare (self: t) (other: t) : int =
-        cmp self other
+        let compare (self: t) (other: t) : int =
+          cmp self other
 
-      let eq (self: t) (other: t) : bool =
-        compare self other = 0
+        let eq (self: t) (other: t) : bool =
+          compare self other = 0
 
-      let le (self: t) (other: t) : bool =
-        compare self other <= 0
+        let le (self: t) (other: t) : bool =
+          compare self other <= 0
 
-      let lt (self: t) (other: t) : bool =
-        compare self other < 0
+        let lt (self: t) (other: t) : bool =
+          compare self other < 0
 
-      let ge (self: t) (other: t) : bool =
-        compare self other >= 0
+        let ge (self: t) (other: t) : bool =
+          compare self other >= 0
 
-      let gt (self: t) (other: t) : bool =
-        compare self other > 0
+        let gt (self: t) (other: t) : bool =
+          compare self other > 0
 
-      let fromtimestamp_ (t: float) (utc: bool) (tz: tzinfo option) : t =
-        let frac, t = Stdcompat.Float.modf t in
-        let us = frac *. 1e6 |> Stdcompat.Float.round |> int_of_float in
-        let t, us =
-          if us >= 1_000_000 then
-            t +. 1., us - 1_000_000
-          else if us < 0 then
-            t -. 1., us + 1_000_000
-          else
-            t, us
-        in
-        let converter = if utc then Time_.gmttime else Time_.localtime in
-        let tm = converter t in
-        let y, m, d, hh, mm, ss, _weekday, _jday, _dst =
-          tm.tm_year,
-          tm.tm_mon,
-          tm.tm_mday,
-          tm.tm_hour,
-          tm.tm_min,
-          tm.tm_sec,
-          tm.tm_wday,
-          tm.tm_yday,
-          tm.tm_isdst
-        in
-        let ss = min ss 59 in
-        let result = make y m d ~hour:hh ~minute:mm ~second:ss ~microsecond:us ?tzinfo:tz () in
-        match tz with
-        | None ->
-          let max_fold_seconds = 24 * 3600 in
-          if t < float_of_int max_fold_seconds && Sys.win32 then
-            result
-          else
-            let y, m, d, hh, mm, ss =
-              let tm = converter (t -. float_of_int max_fold_seconds) in
-              tm.tm_year, tm.tm_mon, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec
-            in
-            let probe1 = make y m d ~hour:hh ~minute:mm ~second:ss ~microsecond:us ?tzinfo:tz () in
-            let trans = Timedelta.sub (sub result probe1) (Timedelta.make ~seconds:max_fold_seconds ()) in
-            let result =
-              if Timedelta.days trans < 0 then
-                let y, m, d, hh, mm, ss =
-                  let tm = converter (t +. float_of_int (Timedelta.(floordiv_t trans (make ~seconds:1 ())))) in
-                  tm.tm_year, tm.tm_mon, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec
-                in
-                let probe2 = make y m d ~hour:hh ~minute:mm ~second:ss ~microsecond:us ?tzinfo:tz () in
-                if eq probe2 result then
-                  {result with fold = 1}
+        let fromtimestamp_ (t: float) (utc: bool) (tz: tzinfo option) : t =
+          let frac, t = Stdcompat.Float.modf t in
+          let us = frac *. 1e6 |> Stdcompat.Float.round |> int_of_float in
+          let t, us =
+            if us >= 1_000_000 then
+              t +. 1., us - 1_000_000
+            else if us < 0 then
+              t -. 1., us + 1_000_000
+            else
+              t, us
+          in
+          let converter = if utc then Time_.gmttime else Time_.localtime in
+          let tm = converter t in
+          let y, m, d, hh, mm, ss, _weekday, _jday, _dst =
+            tm.tm_year,
+            tm.tm_mon,
+            tm.tm_mday,
+            tm.tm_hour,
+            tm.tm_min,
+            tm.tm_sec,
+            tm.tm_wday,
+            tm.tm_yday,
+            tm.tm_isdst
+          in
+          let ss = min ss 59 in
+          let result = make y m d ~hour:hh ~minute:mm ~second:ss ~microsecond:us ?tzinfo:tz () in
+          match tz with
+          | None ->
+            let max_fold_seconds = 24 * 3600 in
+            if t < float_of_int max_fold_seconds && Sys.win32 then
+              result
+            else
+              let y, m, d, hh, mm, ss =
+                let tm = converter (t -. float_of_int max_fold_seconds) in
+                tm.tm_year, tm.tm_mon, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec
+              in
+              let probe1 = make y m d ~hour:hh ~minute:mm ~second:ss ~microsecond:us ?tzinfo:tz () in
+              let trans = Timedelta.sub (sub result probe1) (Timedelta.make ~seconds:max_fold_seconds ()) in
+              let result =
+                if Timedelta.days trans < 0 then
+                  let y, m, d, hh, mm, ss =
+                    let tm = converter (t +. float_of_int (Timedelta.(floordiv_t trans (make ~seconds:1 ())))) in
+                    tm.tm_year, tm.tm_mon, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec
+                  in
+                  let probe2 = make y m d ~hour:hh ~minute:mm ~second:ss ~microsecond:us ?tzinfo:tz () in
+                  if eq probe2 result then
+                    {result with fold = 1}
+                  else
+                    result
                 else
                   result
-              else
-                result
-            in
-            result
-        | Some tz -> tz.fromutc result
-
-      let fromtimestamp ?(tz: tzinfo option) (t: float) : t =
-        fromtimestamp_ t (Stdcompat.Option.is_some tz) tz
-
-      let utcfromtimestamp (t: float) : t =
-        fromtimestamp_ t true None
-
-      let now ?(tz: tzinfo option) ((): unit) : t =
-        let t = Time_.time () in
-        fromtimestamp ?tz t
-
-      let utcnow ((): unit) : t =
-        let t = Time_.time () in
-        utcfromtimestamp t
-
-      let combine ?(tzinfo: tzinfo option) (date: Date.t) (time: Time.t) : t =
-        let tzinfo =
-          match tzinfo with
-          | None -> time.tzinfo
-          | Some _ -> tzinfo
-        in
-        make (Date.year date) (Date.month date) (Date.day date)
-          ~hour:(Time.hour time) ~minute:(Time.minute time) ~second:(Time.second time)
-          ?tzinfo ~fold:(Time.fold time)
-          ()
-
-      let add (self: t) (other: Timedelta.t) : t =
-        let delta = Timedelta.make ~days:(toordinal self) ~hours:self.hour ~minutes:self.minute ~seconds:self.second ~microseconds:self.microsecond () in
-        let delta = Timedelta.add delta other in
-        let hour, rem = divmod (Timedelta.seconds delta) 3600 in
-        let minute, second = divmod rem 60 in
-        if 0 < delta.days && delta.days <= _MAXORDINAL then
-          combine (Date.fromordinal (Timedelta.days delta)) (Time.make ~hour ~minute ~second ~microsecond:(Timedelta.microseconds delta) ?tzinfo:self.tzinfo ())
-        else
-          raise (Exn.OverflowError "result out of range")
-
-      let make_timezone: ?name:string -> Timedelta.t -> tzinfo =
-        let maxoffset = Timedelta.make ~hours:24 ~microseconds:~-1 () in
-        let minoffset = Timedelta.neg maxoffset in
-        fun ?(name: string option) (td: Timedelta.t) : tzinfo ->
-          if not Timedelta.(le minoffset td && le td maxoffset) then
-            raise (Exn.ValueError "offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24).");
-          let name_from_offset (delta: Timedelta.t) : string =
-            if Timedelta.bool delta |> not then
-              "UTC"
-            else
-              let sign, delta =
-                if Timedelta.le delta (Timedelta.make ()) then
-                  "-", Timedelta.neg delta
-                else
-                  "+", delta
               in
-              let hours, rest = Timedelta.divmod delta (Timedelta.make ~hours:1 ()) in
-              let minutes, rest = Timedelta.divmod rest (Timedelta.make ~minutes:1 ()) in
-              let seconds = Timedelta.seconds rest in
-              let microseconds = Timedelta.microseconds rest in
-              if microseconds <> 0 then
-                Format.asprintf "UTC%s%02d:%02d:%02d.%06d" sign hours minutes seconds microseconds
-              else if seconds <> 0 then
-                Format.asprintf "UTC%s%02d:%02d:%02d" sign hours minutes seconds
+              result
+          | Some tz -> tz.fromutc result
+
+        let fromtimestamp ?(tz: tzinfo option) (t: float) : t =
+          fromtimestamp_ t (Stdcompat.Option.is_some tz) tz
+
+        let utcfromtimestamp (t: float) : t =
+          fromtimestamp_ t true None
+
+        let now ?(tz: tzinfo option) ((): unit) : t =
+          let t = Time_.time () in
+          fromtimestamp ?tz t
+
+        let utcnow ((): unit) : t =
+          let t = Time_.time () in
+          utcfromtimestamp t
+
+        let combine ?(tzinfo: tzinfo option) (date: Date.t) (time: Time.t) : t =
+          let tzinfo =
+            match tzinfo with
+            | None -> time.tzinfo
+            | Some _ -> tzinfo
+          in
+          make (Date.year date) (Date.month date) (Date.day date)
+            ~hour:(Time.hour time) ~minute:(Time.minute time) ~second:(Time.second time)
+            ?tzinfo ~fold:(Time.fold time)
+            ()
+
+        let add (self: t) (other: Timedelta.t) : t =
+          let delta = Timedelta.make ~days:(toordinal self) ~hours:self.hour ~minutes:self.minute ~seconds:self.second ~microseconds:self.microsecond () in
+          let delta = Timedelta.add delta other in
+          let hour, rem = divmod (Timedelta.seconds delta) 3600 in
+          let minute, second = divmod rem 60 in
+          if 0 < delta.days && delta.days <= _MAXORDINAL then
+            combine (Date.fromordinal (Timedelta.days delta)) (Time.make ~hour ~minute ~second ~microsecond:(Timedelta.microseconds delta) ?tzinfo:self.tzinfo ())
+          else
+            raise (Exn.OverflowError "result out of range")
+
+        let make_timezone: ?name:string -> Timedelta.t -> tzinfo =
+          let maxoffset = Timedelta.make ~hours:24 ~microseconds:~-1 () in
+          let minoffset = Timedelta.neg maxoffset in
+          fun ?(name: string option) (td: Timedelta.t) : tzinfo ->
+            if not Timedelta.(le minoffset td && le td maxoffset) then
+              raise (Exn.ValueError "offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24).");
+            let name_from_offset (delta: Timedelta.t) : string =
+              if Timedelta.bool delta |> not then
+                "UTC"
               else
-                Format.asprintf "UTC%s%02d:%02d" sign hours minutes
-          in
-          let tzname (_dt: datetime option) : string =
-            match name with
-            | None -> name_from_offset td
-            | Some name -> name
-          in
-          let utcoffset (_dt: datetime option) : Timedelta.t =
-            td
-          in
-          let dst (_dt: datetime option) : Timedelta.t option =
-            None
-          in
-          let fromutc (dt: datetime) : datetime =
-            add dt td
-          in
-          let repr: string =
-            if Timedelta.bool td |> not then
-              "datetime.timezone.utc"
-            else
+                let sign, delta =
+                  if Timedelta.le delta (Timedelta.make ()) then
+                    "-", Timedelta.neg delta
+                  else
+                    "+", delta
+                in
+                let hours, rest = Timedelta.divmod delta (Timedelta.make ~hours:1 ()) in
+                let minutes, rest = Timedelta.divmod rest (Timedelta.make ~minutes:1 ()) in
+                let seconds = Timedelta.seconds rest in
+                let microseconds = Timedelta.microseconds rest in
+                if microseconds <> 0 then
+                  Format.asprintf "UTC%s%02d:%02d:%02d.%06d" sign hours minutes seconds microseconds
+                else if seconds <> 0 then
+                  Format.asprintf "UTC%s%02d:%02d:%02d" sign hours minutes seconds
+                else
+                  Format.asprintf "UTC%s%02d:%02d" sign hours minutes
+            in
+            let tzname (_dt: datetime option) : string =
               match name with
-              | None -> Format.asprintf "%s.%s(%s)" __MODULE__ "timezone" (Timedelta.repr td)
-              | Some name -> Format.asprintf "%s.%s(%s, %s)" __MODULE__ "timezone" (Timedelta.repr td) name
+              | None -> name_from_offset td
+              | Some name -> name
+            in
+            let utcoffset (_dt: datetime option) : Timedelta.t =
+              td
+            in
+            let dst (_dt: datetime option) : Timedelta.t option =
+              None
+            in
+            let fromutc (dt: datetime) : datetime =
+              add dt td
+            in
+            let repr: string =
+              if Timedelta.bool td |> not then
+                "datetime.timezone.utc"
+              else
+                match name with
+                | None -> Format.asprintf "%s.%s(%s)" __MODULE__ "timezone" (Timedelta.repr td)
+                | Some name -> Format.asprintf "%s.%s(%s, %s)" __MODULE__ "timezone" (Timedelta.repr td) name
+            in
+            {
+              tzname: datetime option -> string;
+              utcoffset: datetime option -> Timedelta.t;
+              dst: datetime option -> Timedelta.t option;
+              fromutc: datetime -> datetime;
+              repr: string;
+            }
+
+        let utc_timezone: tzinfo = make_timezone (Timedelta.make ())
+
+        let parse_isoformat_time (tstr: string) : int * int * int * int * tzinfo option =
+          let len_str = Str.len tstr in
+          if len_str < 2 then
+            raise (Exn.ValueError "Isoformat time too short");
+          let tz_pos =
+            let p = 1 + Str.find "-" tstr in
+            if p <> 0 then
+              p
+            else
+              1 + Str.find "+" tstr
           in
-          {
-            tzname: datetime option -> string;
-            utcoffset: datetime option -> Timedelta.t;
-            dst: datetime option -> Timedelta.t option;
-            fromutc: datetime -> datetime;
-            repr: string;
-          }
-
-      let utc_timezone: tzinfo = make_timezone (Timedelta.make ())
-
-      let parse_isoformat_time (tstr: string) : int * int * int * int * tzinfo option =
-        let len_str = Str.len tstr in
-        if len_str < 2 then
-          raise (Exn.ValueError "Isoformat time too short");
-        let tz_pos =
-          let p = 1 + Str.find "-" tstr in
-          if p <> 0 then
-            p
-          else
-            1 + Str.find "+" tstr
-        in
-        let timestr = if tz_pos > 0 then Str.slice ~stop:(tz_pos - 1) tstr else tstr in
-        let hh, mm, ss, ff = parse_hh_mm_ss_ff timestr in
-        let tzi =
-          if tz_pos > 0 then
-            let tzstr = Str.slice ~start:tz_pos tstr in
-            if let l = Str.len tzstr in l <> 5 && l <> 8 && l <> 15 then
-              raise (Exn.ValueError "Malformed time zone string");
-            let hours, minutes, seconds, microseconds = parse_hh_mm_ss_ff tzstr in
-            if hours = 0 && minutes = 0 && seconds = 0 && microseconds = 0 then
-              Some utc_timezone
+          let timestr = if tz_pos > 0 then Str.slice ~stop:(tz_pos - 1) tstr else tstr in
+          let hh, mm, ss, ff = parse_hh_mm_ss_ff timestr in
+          let tzi =
+            if tz_pos > 0 then
+              let tzstr = Str.slice ~start:tz_pos tstr in
+              if let l = Str.len tzstr in l <> 5 && l <> 8 && l <> 15 then
+                raise (Exn.ValueError "Malformed time zone string");
+              let hours, minutes, seconds, microseconds = parse_hh_mm_ss_ff tzstr in
+              if hours = 0 && minutes = 0 && seconds = 0 && microseconds = 0 then
+                Some utc_timezone
+              else
+                let tzsign = if Str.at tstr (tz_pos - 1) = "-" then ~-1 else 1 in
+                let td = Timedelta.make ~hours ~minutes ~seconds ~microseconds () in
+                Some (make_timezone (Timedelta.mul td tzsign))
             else
-              let tzsign = if Str.at tstr (tz_pos - 1) = "-" then ~-1 else 1 in
-              let td = Timedelta.make ~hours ~minutes ~seconds ~microseconds () in
-              Some (make_timezone (Timedelta.mul td tzsign))
-          else
-            None
-        in
-        hh, mm, ss, ff, tzi
+              None
+          in
+          hh, mm, ss, ff, tzi
 
-      let fromisoformat (date_string: string) : t =
-        let dstr = Str.slice ~start:0 ~stop:10 date_string in
-        let tstr = Str.slice ~start:11 date_string in
-        let y, m, d =
-          match parse_isoformat_date dstr with
-          | date_components -> date_components
-          | exception Exn.ValueError _ -> raise (Exn.ValueError ("Invalid isoformat string: "^date_string))
-        in
-        let hour, minute, second, microsecond, tzinfo =
-          if Str.bool tstr then
-            match parse_isoformat_time tstr with
-            | time_components -> time_components
+        let fromisoformat (date_string: string) : t =
+          let dstr = Str.slice ~start:0 ~stop:10 date_string in
+          let tstr = Str.slice ~start:11 date_string in
+          let y, m, d =
+            match parse_isoformat_date dstr with
+            | date_components -> date_components
             | exception Exn.ValueError _ -> raise (Exn.ValueError ("Invalid isoformat string: "^date_string))
-          else
-            0, 0, 0, 0, None
-        in
-        make y m d ~hour ~minute ~second ~microsecond ?tzinfo ()
-
-      let dst (self: t) : Timedelta.t option =
-        match self.tzinfo with
-        | None -> None
-        | Some tzinfo ->
-          let offset = tzinfo.dst (Some self) in
-          let () = check_utc_offset "dst" offset in
-          offset
-
-      let timetuple (self: t) : Time_.struct_time =
-        let dst = dst self in
-        let dst =
-          match dst with
-          | None -> ~-1
-          | Some dst when Timedelta.bool dst -> 1
-          | Some _ -> ~-1
-        in        
-        build_struct_time self.year self.month self.day self.hour self.minute self.second dst
-
-      let mktime (self: t) : int =
-        let epoch = make 1970 1 1 () in
-        let max_fold_seconds = 24 * 3600 in
-        let t = Timedelta.floordiv_t (sub self epoch) (Timedelta.make ~seconds:1 ()) in
-        let local u =
-          let tm = Time_.localtime (float_of_int u) in
-          Timedelta.floordiv_t
-            (sub (make tm.tm_year tm.tm_mon tm.tm_mday ~hour:tm.tm_hour ~minute:tm.tm_min ~second:tm.tm_sec ()) epoch)
-            (Timedelta.make ~seconds:1 ())
-        in
-        let a = local t - t in
-        let u1 = t - a in
-        let t1 = local u1 in
-        let b, return =
-          if t1 = t then
-            let u2 = u1 + if self.fold = 0 then ~- max_fold_seconds else max_fold_seconds in
-            let b = local u2 - u2 in
-            if a = b then
-              b, Some u1
+          in
+          let hour, minute, second, microsecond, tzinfo =
+            if Str.bool tstr then
+              match parse_isoformat_time tstr with
+              | time_components -> time_components
+              | exception Exn.ValueError _ -> raise (Exn.ValueError ("Invalid isoformat string: "^date_string))
             else
+              0, 0, 0, 0, None
+          in
+          make y m d ~hour ~minute ~second ~microsecond ?tzinfo ()
+
+        let dst (self: t) : Timedelta.t option =
+          match self.tzinfo with
+          | None -> None
+          | Some tzinfo ->
+            let offset = tzinfo.dst (Some self) in
+            let () = check_utc_offset "dst" offset in
+            offset
+
+        let timetuple (self: t) : Time_.struct_time =
+          let dst = dst self in
+          let dst =
+            match dst with
+            | None -> ~-1
+            | Some dst when Timedelta.bool dst -> 1
+            | Some _ -> ~-1
+          in        
+          build_struct_time self.year self.month self.day self.hour self.minute self.second dst
+
+        let mktime (self: t) : int =
+          let epoch = make 1970 1 1 () in
+          let max_fold_seconds = 24 * 3600 in
+          let t = Timedelta.floordiv_t (sub self epoch) (Timedelta.make ~seconds:1 ()) in
+          let local u =
+            let tm = Time_.localtime (float_of_int u) in
+            Timedelta.floordiv_t
+              (sub (make tm.tm_year tm.tm_mon tm.tm_mday ~hour:tm.tm_hour ~minute:tm.tm_min ~second:tm.tm_sec ()) epoch)
+              (Timedelta.make ~seconds:1 ())
+          in
+          let a = local t - t in
+          let u1 = t - a in
+          let t1 = local u1 in
+          let b, return =
+            if t1 = t then
+              let u2 = u1 + if self.fold = 0 then ~- max_fold_seconds else max_fold_seconds in
+              let b = local u2 - u2 in
+              if a = b then
+                b, Some u1
+              else
+                b, None
+            else
+              let b = t1 - u1 in
+              let () = assert (a <> b) in
               b, None
-          else
-            let b = t1 - u1 in
-            let () = assert (a <> b) in
-            b, None
-        in
-        match return with
-        | Some return -> return
-        | None ->
-          let u2 = t - b in
-          let t2 = local u2 in
-          if t2 = t then
-            u2
-          else if t1 = t then
-            u1
-          else
-            (if self.fold = 0 then max else min) u1 u2
+          in
+          match return with
+          | Some return -> return
+          | None ->
+            let u2 = t - b in
+            let t2 = local u2 in
+            if t2 = t then
+              u2
+            else if t1 = t then
+              u1
+            else
+              (if self.fold = 0 then max else min) u1 u2
 
-      let _EPOCH = make 1970 1 1 ~tzinfo:utc_timezone ()
+        let _EPOCH = make 1970 1 1 ~tzinfo:utc_timezone ()
 
-      let timestamp (self: t) : float =
-        match self.tzinfo with
-        | None ->
-          let s = mktime self |> float_of_int in
-          s +. (float_of_int self.microsecond) /. 1e6
-        | Some _ -> Timedelta.total_seconds (sub self _EPOCH)
+        let timestamp (self: t) : float =
+          match self.tzinfo with
+          | None ->
+            let s = mktime self |> float_of_int in
+            s +. (float_of_int self.microsecond) /. 1e6
+          | Some _ -> Timedelta.total_seconds (sub self _EPOCH)
 
-      let utctimetuple (self: t) : Time_.struct_time =
-        let offset = utcoffset self in
-        let self =
-          match offset with
-          | Some offset when Timedelta.bool offset -> add self (Timedelta.neg offset)
-          | Some _ | None -> self
-        in
-        let y, m, d = self.year, self.month, self.day in
-        let hh, mm, ss = self.hour, self.minute, self.second in
-        build_struct_time y m d hh mm ss 0
+        let utctimetuple (self: t) : Time_.struct_time =
+          let offset = utcoffset self in
+          let self =
+            match offset with
+            | Some offset when Timedelta.bool offset -> add self (Timedelta.neg offset)
+            | Some _ | None -> self
+          in
+          let y, m, d = self.year, self.month, self.day in
+          let hh, mm, ss = self.hour, self.minute, self.second in
+          build_struct_time y m d hh mm ss 0
 
-      let date (self: t) : Date.t =
-        Date.make self.year self.month self.day
+        let date (self: t) : Date.t =
+          Date.make self.year self.month self.day
 
-      let time (self: t) : Time.t =
-        Time.make ~hour:self.hour ~minute:self.minute ~second:self.second ~microsecond:self.microsecond ~fold:self.fold ()
+        let time (self: t) : Time.t =
+          Time.make ~hour:self.hour ~minute:self.minute ~second:self.second ~microsecond:self.microsecond ~fold:self.fold ()
 
-      let timetz (self: t) : Time.t =
-        Time.make ~hour:self.hour ~minute:self.minute ~second:self.second ~microsecond:self.microsecond ?tzinfo:self.tzinfo ~fold:self.fold ()
+        let timetz (self: t) : Time.t =
+          Time.make ~hour:self.hour ~minute:self.minute ~second:self.second ~microsecond:self.microsecond ?tzinfo:self.tzinfo ~fold:self.fold ()
 
-      let ctime (self: t) : string =
-        let weekday = let w = self |> date |> Date.toordinal in if w <> 0 then w else 7 in
-        Format.asprintf "%s %s %2d %02d:%02d:%02d %04d" _DAYNAMES.(weekday) _MONTHNAMES.(self.month) self.day self.hour self.minute self.second self.year
+        let ctime (self: t) : string =
+          let weekday = let w = self |> date |> Date.toordinal in if w <> 0 then w else 7 in
+          Format.asprintf "%s %s %2d %02d:%02d:%02d %04d" _DAYNAMES.(weekday) _MONTHNAMES.(self.month) self.day self.hour self.minute self.second self.year
 
-      let isoformat ?(sep: char = 'T') ?(timespec: string = "auto") (self: t) : string =
-        let s = Format.asprintf "%04d-%02d-%02d%c%s" self.year self.month self.day sep (format_time ~timespec self.hour self.minute self.second self.microsecond) in
-        let off = utcoffset self in
-        let tz = format_offset off in
-        if Str.bool tz then
-          s ^ tz
-        else
-          s
-
-      let repr (self: t) : string =
-        let l = [self.year; self.month; self.day; self.hour; self.minute; self.second; self.microsecond] in
-        let l =
-          if Stdcompat.List.nth l (List.len l - 1) = 0 then
-            List.slice ~stop:~-1 l
-          else
-            l
-        in
-        let l =
-          if Stdcompat.List.nth l (List.len l - 1) = 0 then
-            List.slice ~stop:~-1 l
-          else
-            l
-        in
-        let s = Format.asprintf "%s.%s(%s)" __MODULE__ "datetime" (Stdcompat.String.concat ", " (Stdcompat.List.map string_of_int l)) in
-        match self.tzinfo with
-        | Some tzinfo ->
-          assert (Str.slice ~start:~-1 s = ")");
-          Format.asprintf "%s, tzinfo=%s)" (Str.slice ~stop:~-1 s) (tzinfo.tzname None)
-        | None ->
-          if self.fold <> 0 then 
-            let () = assert (Str.slice ~start:~-1 s = ")") in
-            Format.asprintf "%s, fold=)" (Str.slice ~stop:~-1 s)
+        let isoformat ?(sep: char = 'T') ?(timespec: string = "auto") (self: t) : string =
+          let s = Format.asprintf "%04d-%02d-%02d%c%s" self.year self.month self.day sep (format_time ~timespec self.hour self.minute self.second self.microsecond) in
+          let off = utcoffset self in
+          let tz = format_offset off in
+          if Str.bool tz then
+            s ^ tz
           else
             s
 
-      let to_string (self: t) : string =
-        isoformat ~sep:' ' self
+        let repr (self: t) : string =
+          let l = [self.year; self.month; self.day; self.hour; self.minute; self.second; self.microsecond] in
+          let l =
+            if Stdcompat.List.nth l (List.len l - 1) = 0 then
+              List.slice ~stop:~-1 l
+            else
+              l
+          in
+          let l =
+            if Stdcompat.List.nth l (List.len l - 1) = 0 then
+              List.slice ~stop:~-1 l
+            else
+              l
+          in
+          let s = Format.asprintf "%s.%s(%s)" __MODULE__ "datetime" (Stdcompat.String.concat ", " (Stdcompat.List.map string_of_int l)) in
+          match self.tzinfo with
+          | Some tzinfo ->
+            assert (Str.slice ~start:~-1 s = ")");
+            Format.asprintf "%s, tzinfo=%s)" (Str.slice ~stop:~-1 s) (tzinfo.tzname None)
+          | None ->
+            if self.fold <> 0 then 
+              let () = assert (Str.slice ~start:~-1 s = ")") in
+              Format.asprintf "%s, fold=)" (Str.slice ~stop:~-1 s)
+            else
+              s
 
-      let tzname (self: t) : string option =
-        match self.tzinfo with
-        | None -> None
-        | Some tzinfo ->
-          let name = tzinfo.tzname (Some self) in
-          Some name
+        let to_string (self: t) : string =
+          isoformat ~sep:' ' self
 
-      let hash (self: t) : int =
-        if self.hashcode = ~-1 then
-          begin
-            let t =
-              if self.fold = 1 then
-                replace ~fold:0 self
-              else
-                self
-            in
-            let tzoff = utcoffset t in
-            match tzoff with
-            | None -> self.hashcode <- Stdcompat.Hashtbl.hash (self.year, self.month, self.day, self.hour, self.minute, self.second, self.microsecond)
-            | Some tzoff ->
-              let days = ymd2ord self.year self.month self.day in
-              let seconds = self.hour * 3600 + self.minute * 60 + self.second in
-              self.hashcode <- Stdcompat.Hashtbl.hash (Timedelta.sub (Timedelta.make ~days ~seconds ~microseconds:self.microsecond ()) tzoff)
-          end;
-        self.hashcode
+        let tzname (self: t) : string option =
+          match self.tzinfo with
+          | None -> None
+          | Some tzinfo ->
+            let name = tzinfo.tzname (Some self) in
+            Some name
 
-      let min = make 1 1 1 ()
-      let max = make 9999 12 31 ~hour:23 ~minute:59 ~second:59 ~microsecond:999999 ()
-      let resolution = Timedelta.make ~microseconds:1 ()
+        let hash (self: t) : int =
+          if self.hashcode = ~-1 then
+            begin
+              let t =
+                if self.fold = 1 then
+                  replace ~fold:0 self
+                else
+                  self
+              in
+              let tzoff = utcoffset t in
+              match tzoff with
+              | None -> self.hashcode <- Stdcompat.Hashtbl.hash (self.year, self.month, self.day, self.hour, self.minute, self.second, self.microsecond)
+              | Some tzoff ->
+                let days = ymd2ord self.year self.month self.day in
+                let seconds = self.hour * 3600 + self.minute * 60 + self.second in
+                self.hashcode <- Stdcompat.Hashtbl.hash (Timedelta.sub (Timedelta.make ~days ~seconds ~microseconds:self.microsecond ()) tzoff)
+            end;
+          self.hashcode
 
-    end)
+        let min = make 1 1 1 ()
+        let max = make 9999 12 31 ~hour:23 ~minute:59 ~second:59 ~microsecond:999999 ()
+        let resolution = Timedelta.make ~microseconds:1 ()
+
+      end)
   end)
 
+module Timezone =
+  (struct
+    type datetime = TimeDatetimeTZ.datetime
+    type tzinfo = TimeDatetimeTZ.tzinfo = {
+      tzname: datetime option -> string;
+      utcoffset: datetime option -> Timedelta.t;
+      dst: datetime option -> Timedelta.t option;
+      fromutc: datetime -> datetime;
+      repr: string;
+    }
+
+    type t = {
+      offset: Timedelta.t;
+      name: string option;
+    }
+
+    let maxoffset = Timedelta.make ~hours:24 ~microseconds:~-1 ()
+    let minoffset = Timedelta.neg maxoffset
+
+    let make ?(name:string option) (offset: Timedelta.t) : t =
+      if not Timedelta.Cmp.(minoffset <= offset && offset <= maxoffset) then
+        raise (Exn.ValueError "");
+      {
+        offset;
+        name;
+      }
+
+    let utc = make (Timedelta.make ())
+
+    let eq (self: t) (other: t) : bool =
+      Timedelta.eq self.offset other.offset
+
+    let hash (self: t) : int =
+      Timedelta.hash self.offset
+
+    let repr (self: t) : string =
+      if self == utc then
+        "Datetime.Timezone.utc"
+      else
+        match self.name with
+        | None -> Format.asprintf "Datetime.Timezone(%s)" (Timedelta.repr self.offset)
+        | Some name -> Format.asprintf "Datetime.Timezone(%s, %s)" (Timedelta.repr self.offset) name
+
+    let dst (_: t) (_: datetime option) : Timedelta.t option =
+      None
+
+    let fromutc (self: t) (dt: datetime) : datetime =
+      TimeDatetimeTZ.Datetime.add dt self.offset
+
+    let name_from_offset (delta: Timedelta.t) : string =
+      if delta |> Timedelta.bool |> not then
+        "UTC"
+      else
+        let sign, delta =
+          if Timedelta.lt delta (Timedelta.make ()) then
+            "-", Timedelta.neg delta
+          else
+            "+", delta
+        in
+        let hours, rest = Timedelta.divmod delta (Timedelta.make ~hours:1 ()) in
+        let minutes, rest = Timedelta.divmod rest (Timedelta.make ~minutes:1 ()) in
+        let seconds = rest.seconds in
+        let microseconds = rest.microseconds in
+        if microseconds <> 0 then
+          Format.asprintf "UTC%s%02d:%02d:%02d.%06d" sign hours minutes seconds microseconds
+        else if seconds <> 0 then
+          Format.asprintf "UTC%s%02d:%02d:%02d" sign hours minutes seconds
+        else
+          Format.asprintf "UTC%s%02d:%02d" sign hours minutes
+
+
+    let tzname (self: t) (_: datetime option) : string =
+      match self.name with
+      | None -> name_from_offset self.offset
+      | Some name -> name
+
+    let to_string (self: t) : string =
+      tzname self None
+
+    let utcoffset (self: t) (_: datetime option) : Timedelta.t =
+      self.offset
+
+    let to_tzinfo (self: t) : tzinfo =
+      {
+        tzname: datetime option -> string = tzname self;
+        utcoffset: datetime option -> Timedelta.t = utcoffset self;
+        dst: datetime option -> Timedelta.t option = dst self;
+        fromutc: datetime -> datetime = fromutc self;
+        repr: string = repr self;
+      }
+
+    let make_tzinfo ?(name:string option) (offset: Timedelta.t) : tzinfo =
+      make ?name offset |> to_tzinfo
+  end)
+
+let utc = Timezone.(to_tzinfo utc)
+
 type datetime = TimeDatetimeTZ.datetime
-and tzinfo = TimeDatetimeTZ.tzinfo = {
+type tzinfo = TimeDatetimeTZ.tzinfo = {
   tzname: datetime option -> string;
   utcoffset: datetime option -> Timedelta.t;
   dst: datetime option -> Timedelta.t option;
